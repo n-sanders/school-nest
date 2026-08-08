@@ -45,7 +45,7 @@ docker compose cp schooltracking:/data/school.db ./school-backup.db
 dotnet run --project src/SchoolTracking --urls http://127.0.0.1:8080
 ```
 
-The database defaults to `src/SchoolTracking/data/school.db`. Override with config/env `Database__Path`.
+The database defaults to `src/SchoolTracking/storage/school.db`. Override with config/env `Database__Path`.
 
 To re-seed from scratch, delete the SQLite file and restart the app.
 

@@ -6,7 +6,7 @@ using SchoolTracking.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 var dbPath = builder.Configuration["Database:Path"]
-    ?? Path.Combine(builder.Environment.ContentRootPath, "data", "school.db");
+    ?? Path.Combine(builder.Environment.ContentRootPath, "storage", "school.db");
 Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
