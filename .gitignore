@@ -6,5 +6,8 @@ obj/
 *.db
 *.db-shm
 *.db-wal
-**/data/
+**/data/*.db
+**/data/*.db-shm
+**/data/*.db-wal
+src/SchoolTracking/data/
 .env
