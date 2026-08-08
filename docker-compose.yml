@@ -1,0 +1,13 @@
+services:
+  schooltracking:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - schooltracking-data:/data
+    environment:
+      Database__Path: /data/school.db
+      ASPNETCORE_URLS: http://+:8080
+
+volumes:
+  schooltracking-data:

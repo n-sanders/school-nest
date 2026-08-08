@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Today — SchoolTracking</title>
+  <link rel="stylesheet" href="/css/site.css" />
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar" id="topbar"></div>
+    <div id="flash" hidden></div>
+
+    <div class="panel">
+      <h1>Today's required work</h1>
+      <p id="dayMeta" class="muted"></p>
+      <ul class="list" id="requiredList"></ul>
+    </div>
+
+    <div class="panel">
+      <h2>Optional work</h2>
+      <ul class="list" id="optionalList"></ul>
+      <form id="optionalForm" class="row" style="margin-top:1rem">
+        <label>From optional list
+          <select id="optActivity"><option value="">— new freeform —</option></select>
+        </label>
+        <label>New name (if freeform)
+          <input id="optName" placeholder="e.g. Free reading" />
+        </label>
+        <label>Effort
+          <span id="optEffortWrap"></span>
+        </label>
+        <label>Date
+          <input id="optDate" type="date" />
+        </label>
+        <button type="submit">Add &amp; complete</button>
+      </form>
+      <p class="muted">Optional items are separate from courses. New freeform names are added to the family optional list.</p>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    document.getElementById("optEffortWrap").innerHTML = effortSelect("optEffort", "low");
+
+    async function load() {
+      const me = await requireAuth("student");
+      renderTopbar(me, "today");
+      const flash = document.getElementById("flash");
+
+      const activities = await api.get("/api/family/optional-activities");
+      const activitySelect = document.getElementById("optActivity");
+      activitySelect.innerHTML = `<option value="">— new freeform —</option>` +
+        activities.map(a => `<option value="${a.id}" data-effort="${a.defaultEffort}">${a.name}</option>`).join("");
+      document.getElementById("optDate").value = new Date().toISOString().slice(0, 10);
+
+      activitySelect.onchange = () => {
+        const opt = activitySelect.selectedOptions[0];
+        if (opt?.dataset.effort) {
+          document.querySelector('select[name="optEffort"]').value = opt.dataset.effort;
+        }
+      };
+
+      const data = await api.get("/api/assignments/today");
+      const dayMeta = document.getElementById("dayMeta");
+      const requiredList = document.getElementById("requiredList");
+      const optionalList = document.getElementById("optionalList");
+
+      if (!data.day) {
+        dayMeta.textContent = data.message || "Nothing planned.";
+        requiredList.innerHTML = "";
+        optionalList.innerHTML = "";
+        return;
+      }
+
+      const done = data.day.status === "completed";
+      dayMeta.textContent = `Day slot #${data.day.sequenceIndex} · ${data.day.status}` +
+        (done ? " — you are done with required work for this day!" : "");
+
+      requiredList.innerHTML = data.assignments.map(a => `
+        <li>
+          <div><strong>${a.subjectName} · ${a.courseName}</strong> — ${a.name} ${statusBadge(a.status)}</div>
+          <div class="muted">${a.description || ""} ${a.url ? `· <a href="${a.url}" target="_blank" rel="noopener">resource</a>` : ""}</div>
+          <div class="actions">
+            ${a.status === "assigned" ? `
+              ${effortSelect(`effort-${a.id}`, a.effort)}
+              <button data-complete="${a.id}" type="button">Complete</button>
+              <button class="warn" data-defer="${a.id}" type="button">Request deferral</button>
+            ` : a.status === "completed" ? `
+              ${effortSelect(`effort-${a.id}`, a.effort)}
+              <button class="secondary" data-effort="${a.id}" type="button">Update effort</button>
+            ` : `<span class="muted">Waiting on parent</span>`}
+          </div>
+        </li>
+      `).join("") || `<li class="muted">No required assignments on this day.</li>`;
+
+      optionalList.innerHTML = (data.optional || []).map(a => `
+        <li>
+          <div><strong>${a.name}</strong> ${statusBadge(a.status)}
+            ${a.countsTowardHours ? '<span class="badge done">hours counted</span>' : a.status === "completed" ? '<span class="badge pending">awaiting parent ack</span>' : ""}
+          </div>
+          <div class="muted">${a.courseName} · ${a.effort} · ${a.activityDate || ""}</div>
+          <div class="actions">
+            ${a.status === "assigned" ? `
+              ${effortSelect(`opt-effort-${a.id}`, a.effort)}
+              <button data-complete="${a.id}" type="button">Complete</button>
+            ` : `
+              ${effortSelect(`opt-effort-${a.id}`, a.effort)}
+              <button class="secondary" data-effort="${a.id}" type="button">Update effort</button>
+            `}
+          </div>
+        </li>
+      `).join("") || `<li class="muted">No optional work logged for today.</li>`;
+
+      requiredList.onclick = optionalList.onclick = async (e) => {
+        const t = e.target;
+        try {
+          if (t.dataset.complete) {
+            const id = t.dataset.complete;
+            const sel = document.querySelector(`select[name="effort-${id}"], select[name="opt-effort-${id}"]`);
+            await api.post(`/api/assignments/${id}/complete`, { effort: sel?.value });
+            showFlash(flash, "Marked complete");
+            await load();
+          } else if (t.dataset.defer) {
+            await api.post(`/api/assignments/${t.dataset.defer}/defer`, {});
+            showFlash(flash, "Deferral requested");
+            await load();
+          } else if (t.dataset.effort) {
+            const id = t.dataset.effort;
+            const sel = document.querySelector(`select[name="effort-${id}"], select[name="opt-effort-${id}"]`);
+            await api.patch(`/api/assignments/${id}/effort`, { effort: sel.value });
+            showFlash(flash, "Effort updated");
+            await load();
+          }
+        } catch (err) {
+          showFlash(flash, err.message, true);
+        }
+      };
+    }
+
+    document.getElementById("optionalForm").onsubmit = async (e) => {
+      e.preventDefault();
+      const flash = document.getElementById("flash");
+      try {
+        const activityId = document.getElementById("optActivity").value;
+        const body = {
+          effort: document.querySelector('select[name="optEffort"]').value,
+          activityDate: document.getElementById("optDate").value,
+          completeImmediately: true
+        };
+        if (activityId) {
+          body.optionalActivityId = Number(activityId);
+        } else {
+          body.name = document.getElementById("optName").value;
+          if (!body.name) throw new Error("Name required for freeform");
+        }
+        await api.post("/api/assignments/optional", body);
+        showFlash(flash, "Optional work added (awaiting parent acknowledgment for hours)");
+        document.getElementById("optName").value = "";
+        await load();
+      } catch (err) {
+        showFlash(flash, err.message, true);
+      }
+    };
+
+    load().catch(err => {
+      if (err.message !== "Not authenticated" && err.message !== "Wrong role") {
+        showFlash(document.getElementById("flash"), err.message, true);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Magic words — SchoolTracking</title>
+  <link rel="stylesheet" href="/css/site.css" />
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar" id="topbar"></div>
+    <div id="flash" hidden></div>
+    <div class="panel">
+      <h1>Magic words</h1>
+      <p class="muted">Change your own magic word, or any student's. Other parents manage their own words.</p>
+      <ul class="list" id="list"></ul>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    async function refresh() {
+      const me = await requireAuth("parent");
+      renderTopbar(me, "magic");
+      const users = await api.get("/api/family/magic-words");
+      const list = document.getElementById("list");
+      list.innerHTML = users.map(u => `
+        <li>
+          <div><strong>${u.displayName}</strong> <span class="muted">(${u.role}${u.isSelf ? ", you" : ""})</span></div>
+          <div class="actions">
+            <label>Magic word
+              <input data-word-for="${u.id}" value="${u.magicWord.replaceAll('"', '&quot;')}" ${u.role === "parent" && !u.isSelf ? "disabled" : ""} />
+            </label>
+            ${u.role === "parent" && !u.isSelf
+              ? `<span class="muted">Only ${u.displayName} can change this</span>`
+              : `<button data-save="${u.id}" type="button">Save</button>`}
+          </div>
+        </li>
+      `).join("");
+
+      list.onclick = async (e) => {
+        const t = e.target;
+        if (!t.dataset.save) return;
+        try {
+          const id = t.dataset.save;
+          const input = document.querySelector(`input[data-word-for="${id}"]`);
+          await api.put(`/api/family/magic-words/${id}`, { magicWord: input.value });
+          showFlash(document.getElementById("flash"), "Saved");
+          await refresh();
+        } catch (err) {
+          showFlash(document.getElementById("flash"), err.message, true);
+        }
+      };
+    }
+    refresh().catch(() => {});
+  </script>
+</body>
+</html>

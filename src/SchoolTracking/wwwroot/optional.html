@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Optional acknowledgment — SchoolTracking</title>
+  <link rel="stylesheet" href="/css/site.css" />
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar" id="topbar"></div>
+    <div id="flash" hidden></div>
+
+    <div class="panel">
+      <h1>Acknowledge optional hours</h1>
+      <p class="muted">Optional work only counts toward hour totals after you acknowledge it. Optional activities are a separate list from course work.</p>
+      <ul class="list" id="list"></ul>
+    </div>
+
+    <div class="panel">
+      <h2>Log optional for a student</h2>
+      <form id="form" class="row">
+        <label>Student <select id="studentId" required></select></label>
+        <label>Optional list <select id="activityId"><option value="">— new freeform —</option></select></label>
+        <label>New name <input id="name" placeholder="if freeform" /></label>
+        <label>Effort <span id="effortWrap"></span></label>
+        <label>Date <input id="date" type="date" required /></label>
+        <button type="submit">Add completed optional</button>
+      </form>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    document.getElementById("effortWrap").innerHTML = effortSelect("effort", "low");
+
+    async function refresh() {
+      const me = await requireAuth("parent");
+      renderTopbar(me, "optional");
+
+      const students = await api.get("/api/catalog/students");
+      document.getElementById("studentId").innerHTML =
+        students.map(s => `<option value="${s.id}">${s.displayName}</option>`).join("");
+
+      const activities = await api.get("/api/family/optional-activities");
+      const activitySelect = document.getElementById("activityId");
+      activitySelect.innerHTML = `<option value="">— new freeform —</option>` +
+        activities.map(a => `<option value="${a.id}" data-effort="${a.defaultEffort}">${a.name}</option>`).join("");
+      activitySelect.onchange = () => {
+        const opt = activitySelect.selectedOptions[0];
+        if (opt?.dataset.effort) {
+          document.querySelector('select[name="effort"]').value = opt.dataset.effort;
+        }
+      };
+      document.getElementById("date").value = new Date().toISOString().slice(0, 10);
+
+      const pending = await api.get("/api/assignments/optional/pending");
+      const list = document.getElementById("list");
+      list.innerHTML = pending.map(i => `
+        <li>
+          <div><strong>${i.studentName}</strong> — ${i.assignment.name}</div>
+          <div class="muted">${i.assignment.activityDate} · ${i.assignment.effort} · ${i.assignment.minutes} min</div>
+          <div class="actions">
+            ${effortSelect(`oe-${i.assignment.id}`, i.assignment.effort)}
+            <button class="secondary" data-effort="${i.assignment.id}" type="button">Set effort</button>
+            <button data-ack="${i.assignment.id}" type="button">Acknowledge hours</button>
+          </div>
+        </li>
+      `).join("") || `<li class="muted">Nothing waiting for acknowledgment.</li>`;
+
+      list.onclick = async (e) => {
+        const t = e.target;
+        try {
+          if (t.dataset.ack) {
+            await api.post(`/api/assignments/${t.dataset.ack}/acknowledge`, {});
+            showFlash(document.getElementById("flash"), "Hours acknowledged");
+            await refresh();
+          } else if (t.dataset.effort) {
+            const id = t.dataset.effort;
+            const sel = document.querySelector(`select[name="oe-${id}"]`);
+            await api.patch(`/api/assignments/${id}/effort`, { effort: sel.value });
+            showFlash(document.getElementById("flash"), "Effort updated");
+            await refresh();
+          }
+        } catch (err) {
+          showFlash(document.getElementById("flash"), err.message, true);
+        }
+      };
+    }
+
+    document.getElementById("form").onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        const activityId = document.getElementById("activityId").value;
+        const body = {
+          studentId: Number(document.getElementById("studentId").value),
+          effort: document.querySelector('select[name="effort"]').value,
+          activityDate: document.getElementById("date").value,
+          completeImmediately: true
+        };
+        if (activityId) body.optionalActivityId = Number(activityId);
+        else {
+          body.name = document.getElementById("name").value;
+          if (!body.name) throw new Error("Name required for freeform");
+        }
+        await api.post("/api/assignments/optional", body);
+        showFlash(document.getElementById("flash"), "Optional logged — acknowledge below to count hours");
+        document.getElementById("name").value = "";
+        await refresh();
+      } catch (err) {
+        showFlash(document.getElementById("flash"), err.message, true);
+      }
+    };
+
+    refresh().catch(() => {});
+  </script>
+</body>
+</html>

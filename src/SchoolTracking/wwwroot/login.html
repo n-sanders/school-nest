@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Login — SchoolTracking</title>
+  <link rel="stylesheet" href="/css/site.css" />
+</head>
+<body>
+  <div class="shell login-wrap">
+    <div class="panel">
+      <h1>SchoolTracking</h1>
+      <p class="muted">Sign in with your magic word.</p>
+      <div id="flash" hidden></div>
+      <form id="loginForm" class="row">
+        <label>Who are you?
+          <select id="userId" required></select>
+        </label>
+        <label>Magic word
+          <input id="magicWord" type="password" autocomplete="current-password" required />
+        </label>
+        <button type="submit">Enter</button>
+      </form>
+      <p class="muted" style="margin-top:1rem;font-size:0.85rem">
+        Seed examples: Mama/<code>kate</code>, Papa/<code>nate</code>, Evie/<code>bearcat</code>, Noah/<code>spacex</code>
+      </p>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    (async function () {
+      const flash = document.getElementById("flash");
+      try {
+        const me = await api.get("/api/auth/me");
+        location.href = me.role === "parent" ? "/planner.html" : "/index.html";
+        return;
+      } catch { /* not logged in */ }
+
+      const users = await api.get("/api/auth/users");
+      const select = document.getElementById("userId");
+      select.innerHTML = users.map(u =>
+        `<option value="${u.id}">${u.displayName} (${u.role})</option>`
+      ).join("");
+
+      document.getElementById("loginForm").onsubmit = async (e) => {
+        e.preventDefault();
+        try {
+          const body = {
+            userId: Number(select.value),
+            magicWord: document.getElementById("magicWord").value
+          };
+          const me = await api.post("/api/auth/login", body);
+          location.href = me.role === "parent" ? "/planner.html" : "/index.html";
+        } catch (err) {
+          showFlash(flash, err.message || "Login failed", true);
+        }
+      };
+    })();
+  </script>
+</body>
+</html>

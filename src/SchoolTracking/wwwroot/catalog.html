@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Catalog — SchoolTracking</title>
+  <link rel="stylesheet" href="/css/site.css" />
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar" id="topbar"></div>
+    <div id="flash" hidden></div>
+
+    <div class="panel">
+      <h1>Family catalog</h1>
+      <div id="tree"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Add subject</h2>
+      <form id="subjectForm" class="row">
+        <label>Name <input id="subjectName" required /></label>
+        <button type="submit">Add subject</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Add course</h2>
+      <form id="courseForm" class="row">
+        <label>Subject <select id="courseSubject" required></select></label>
+        <label>Name <input id="courseName" required /></label>
+        <button type="submit">Add course</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Add catalog assignment</h2>
+      <form id="itemForm" class="row">
+        <label>Course <select id="itemCourse" required></select></label>
+        <label>Name <input id="itemName" required /></label>
+        <label>URL <input id="itemUrl" placeholder="https://..." /></label>
+        <label>Default effort <span id="itemEffortWrap"></span></label>
+        <label>Description <textarea id="itemDesc"></textarea></label>
+        <button type="submit">Add assignment</button>
+      </form>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    document.getElementById("itemEffortWrap").innerHTML = effortSelect("itemEffort", "low");
+
+    async function refresh() {
+      const me = await requireAuth("parent");
+      renderTopbar(me, "catalog");
+      const tree = await api.get("/api/catalog/tree");
+      document.getElementById("tree").innerHTML = tree.map(s => `
+        <div class="day-card">
+          <h3>${s.name}</h3>
+          ${s.courses.map(c => `
+            <div style="margin:0.5rem 0 0.75rem 0.5rem">
+              <strong>${c.name}</strong>
+              <ul class="list">
+                ${c.assignments.map(a => `
+                  <li>${a.name} · ${a.defaultEffort}
+                    ${a.url ? `· <a href="${a.url}" target="_blank" rel="noopener">link</a>` : ""}
+                    ${a.description ? `<div class="muted">${a.description}</div>` : ""}
+                  </li>
+                `).join("") || `<li class="muted">No assignments</li>`}
+              </ul>
+            </div>
+          `).join("") || `<p class="muted">No courses</p>`}
+        </div>
+      `).join("") || `<p class="muted">No subjects yet.</p>`;
+
+      document.getElementById("courseSubject").innerHTML =
+        tree.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
+
+      const courseOptions = [];
+      for (const s of tree) {
+        for (const c of s.courses) {
+          courseOptions.push(`<option value="${c.id}">${s.name} / ${c.name}</option>`);
+        }
+      }
+      document.getElementById("itemCourse").innerHTML = courseOptions.join("");
+    }
+
+    document.getElementById("subjectForm").onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api.post("/api/catalog/subjects", { name: document.getElementById("subjectName").value });
+        document.getElementById("subjectName").value = "";
+        await refresh();
+      } catch (err) { showFlash(document.getElementById("flash"), err.message, true); }
+    };
+
+    document.getElementById("courseForm").onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api.post("/api/catalog/courses", {
+          subjectId: Number(document.getElementById("courseSubject").value),
+          name: document.getElementById("courseName").value
+        });
+        document.getElementById("courseName").value = "";
+        await refresh();
+      } catch (err) { showFlash(document.getElementById("flash"), err.message, true); }
+    };
+
+    document.getElementById("itemForm").onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api.post("/api/catalog/assignments", {
+          courseId: Number(document.getElementById("itemCourse").value),
+          name: document.getElementById("itemName").value,
+          url: document.getElementById("itemUrl").value,
+          description: document.getElementById("itemDesc").value,
+          defaultEffort: document.querySelector('select[name="itemEffort"]').value
+        });
+        document.getElementById("itemName").value = "";
+        document.getElementById("itemUrl").value = "";
+        document.getElementById("itemDesc").value = "";
+        await refresh();
+      } catch (err) { showFlash(document.getElementById("flash"), err.message, true); }
+    };
+
+    refresh().catch(() => {});
+  </script>
+</body>
+</html>

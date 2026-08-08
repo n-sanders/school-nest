@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reports — SchoolTracking</title>
+  <link rel="stylesheet" href="/css/site.css" />
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar" id="topbar"></div>
+    <div id="flash" hidden></div>
+
+    <div class="panel">
+      <h1>Compliance reports</h1>
+      <form id="filters" class="row">
+        <label>Student <select id="studentId" required></select></label>
+        <label>From <input id="from" type="date" /></label>
+        <label>To <input id="to" type="date" /></label>
+        <button type="submit">Refresh</button>
+      </form>
+      <form id="targetForm" class="row" style="margin-top:0.75rem">
+        <label>Family target hours / year
+          <input id="targetHours" type="number" min="0" step="1" />
+        </label>
+        <button class="secondary" type="submit">Save target</button>
+      </form>
+    </div>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="panel">
+      <h2>Day calendar</h2>
+      <p class="muted">Full days are planned-day slots marked complete. Hours include required completions plus acknowledged optional work.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Full day</th>
+            <th>Hours</th>
+            <th>Required min</th>
+            <th>Optional min</th>
+            <th>Items</th>
+          </tr>
+        </thead>
+        <tbody id="calendar"></tbody>
+      </table>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    async function loadReport() {
+      const me = await requireAuth("parent");
+      renderTopbar(me, "reports");
+
+      const students = await api.get("/api/catalog/students");
+      const studentSelect = document.getElementById("studentId");
+      const prev = studentSelect.value;
+      studentSelect.innerHTML = students.map(s => `<option value="${s.id}">${s.displayName}</option>`).join("");
+      if (prev) studentSelect.value = prev;
+
+      const family = await api.get("/api/reports/family");
+      document.getElementById("targetHours").value = family.targetHoursPerYear;
+
+      const to = document.getElementById("to");
+      const from = document.getElementById("from");
+      if (!to.value) to.value = new Date().toISOString().slice(0, 10);
+      if (!from.value) {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() - 1);
+        d.setDate(d.getDate() + 1);
+        from.value = d.toISOString().slice(0, 10);
+      }
+
+      const studentId = studentSelect.value;
+      if (!studentId) return;
+
+      const report = await api.get(`/api/reports/${studentId}?from=${from.value}&to=${to.value}`);
+      document.getElementById("stats").innerHTML = `
+        <div class="stat"><div class="muted">Total hours</div><div class="value">${report.totalHours}</div></div>
+        <div class="stat"><div class="muted">Target</div><div class="value">${report.targetHoursPerYear}</div></div>
+        <div class="stat"><div class="muted">Remaining</div><div class="value">${report.hoursRemaining}</div></div>
+        <div class="stat"><div class="muted">Full days</div><div class="value">${report.fullDayCount}</div></div>
+        <div class="stat"><div class="muted">Active days</div><div class="value">${report.activeDayCount}</div></div>
+      `;
+
+      document.getElementById("calendar").innerHTML = report.calendar.map(d => `
+        <tr>
+          <td>${d.date}</td>
+          <td>${d.isFullDay ? "Yes" : "—"}</td>
+          <td>${d.hours}</td>
+          <td>${d.requiredMinutes}</td>
+          <td>${d.optionalMinutes}</td>
+          <td>${d.assignmentCount}</td>
+        </tr>
+      `).join("") || `<tr><td colspan="6" class="muted">No activity in range.</td></tr>`;
+    }
+
+    document.getElementById("filters").onsubmit = async (e) => {
+      e.preventDefault();
+      try { await loadReport(); }
+      catch (err) { showFlash(document.getElementById("flash"), err.message, true); }
+    };
+
+    document.getElementById("targetForm").onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api.put("/api/reports/family/target-hours", {
+          targetHoursPerYear: Number(document.getElementById("targetHours").value)
+        });
+        showFlash(document.getElementById("flash"), "Target saved");
+        await loadReport();
+      } catch (err) {
+        showFlash(document.getElementById("flash"), err.message, true);
+      }
+    };
+
+    loadReport().catch(() => {});
+  </script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Planner — SchoolTracking</title>
+  <link rel="stylesheet" href="/css/site.css" />
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar" id="topbar"></div>
+    <div id="flash" hidden></div>
+
+    <div class="panel">
+      <h1>Day planner</h1>
+      <div class="row">
+        <label>Student
+          <select id="studentId"></select>
+        </label>
+        <button id="addDay" type="button">Add planned day</button>
+      </div>
+    </div>
+
+    <div id="days"></div>
+
+    <div class="panel">
+      <h2>Assign from catalog</h2>
+      <form id="assignForm" class="row">
+        <label>Day
+          <select id="dayId" required></select>
+        </label>
+        <label>Catalog item
+          <select id="catalogId" required></select>
+        </label>
+        <label>Effort
+          <span id="effortWrap"></span>
+        </label>
+        <button type="submit">Add required assignment</button>
+      </form>
+      <p class="muted">MVP rule: one required assignment per course per day.</p>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    document.getElementById("effortWrap").innerHTML = effortSelect("effort", "low");
+    let catalogById = {};
+
+    async function refresh() {
+      const me = await requireAuth("parent");
+      renderTopbar(me, "planner");
+      const flash = document.getElementById("flash");
+      const students = await api.get("/api/catalog/students");
+      const studentSelect = document.getElementById("studentId");
+      const prev = studentSelect.value;
+      studentSelect.innerHTML = students.map(s => `<option value="${s.id}">${s.displayName}</option>`).join("");
+      if (prev) studentSelect.value = prev;
+
+      const tree = await api.get("/api/catalog/tree");
+      catalogById = {};
+      const catalogOptions = [];
+      for (const s of tree) {
+        for (const c of s.courses) {
+          for (const a of c.assignments) {
+            catalogById[a.id] = a;
+            catalogOptions.push(`<option value="${a.id}" data-effort="${a.defaultEffort}">${s.name} / ${c.name}: ${a.name}</option>`);
+          }
+        }
+      }
+      document.getElementById("catalogId").innerHTML = catalogOptions.join("");
+
+      const studentId = studentSelect.value;
+      if (!studentId) return;
+      const days = await api.get(`/api/planner/${studentId}/days`);
+      document.getElementById("dayId").innerHTML = days
+        .filter(d => d.status !== "completed")
+        .map(d => `<option value="${d.id}">Day #${d.sequenceIndex} (${d.status})</option>`)
+        .join("");
+
+      document.getElementById("days").innerHTML = days.map(d => `
+        <div class="day-card">
+          <h3>Day #${d.sequenceIndex} · ${d.status}${d.calendarDate ? " · " + d.calendarDate : ""}</h3>
+          <ul class="list">
+            ${d.assignments.map(a => `
+              <li>
+                <div><strong>${a.subjectName} · ${a.courseName}</strong> — ${a.name} ${statusBadge(a.status)} · ${a.effort}</div>
+                <div class="actions">
+                  ${effortSelect(`pe-${a.id}`, a.effort)}
+                  <button class="secondary" data-effort="${a.id}" type="button">Set effort</button>
+                  ${d.status !== "completed" ? `<button class="danger" data-remove="${a.id}" type="button">Remove</button>` : ""}
+                </div>
+              </li>
+            `).join("") || `<li class="muted">No assignments yet.</li>`}
+          </ul>
+        </div>
+      `).join("") || `<div class="panel muted">No planned days. Add one to get started.</div>`;
+
+      document.getElementById("days").onclick = async (e) => {
+        const t = e.target;
+        try {
+          if (t.dataset.remove) {
+            await api.del(`/api/planner/assignments/${t.dataset.remove}`);
+            showFlash(flash, "Removed");
+            await refresh();
+          } else if (t.dataset.effort) {
+            const id = t.dataset.effort;
+            const sel = document.querySelector(`select[name="pe-${id}"]`);
+            await api.patch(`/api/assignments/${id}/effort`, { effort: sel.value });
+            showFlash(flash, "Effort updated");
+            await refresh();
+          }
+        } catch (err) {
+          showFlash(flash, err.message, true);
+        }
+      };
+    }
+
+    document.getElementById("catalogId").onchange = () => {
+      const id = document.getElementById("catalogId").value;
+      const item = catalogById[id];
+      if (item) document.querySelector('select[name="effort"]').value = item.defaultEffort;
+    };
+
+    document.getElementById("studentId").onchange = () => refresh();
+    document.getElementById("addDay").onclick = async () => {
+      try {
+        await api.post(`/api/planner/${document.getElementById("studentId").value}/days`, {});
+        await refresh();
+      } catch (err) {
+        showFlash(document.getElementById("flash"), err.message, true);
+      }
+    };
+
+    document.getElementById("assignForm").onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        const studentId = document.getElementById("studentId").value;
+        const dayId = document.getElementById("dayId").value;
+        await api.post(`/api/planner/${studentId}/days/${dayId}/assignments`, {
+          catalogAssignmentId: Number(document.getElementById("catalogId").value),
+          effort: document.querySelector('select[name="effort"]').value
+        });
+        showFlash(document.getElementById("flash"), "Assigned");
+        await refresh();
+      } catch (err) {
+        showFlash(document.getElementById("flash"), err.message, true);
+      }
+    };
+
+    refresh().catch(() => {});
+  </script>
+</body>
+</html>
