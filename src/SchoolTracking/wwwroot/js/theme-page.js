@@ -2,6 +2,9 @@
   const me = await requireAuth();
   await renderTopbar(me, "theme");
 
+  document.getElementById("previewBrand").innerHTML =
+    `${snLogo()}<span>School Nest</span>`;
+
   const presetGrid = document.getElementById("preset-grid");
   const fontGrid = document.getElementById("font-grid");
   const colorGrid = document.getElementById("color-grid");

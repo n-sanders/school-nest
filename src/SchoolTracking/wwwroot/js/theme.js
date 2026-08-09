@@ -1,6 +1,49 @@
 window.StTheme = (function () {
   const STORAGE_KEY = "schooltracking-theme";
 
+  function parseHex(hex) {
+    const v = String(hex || "").trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+      return [
+        parseInt(v.slice(1, 3), 16),
+        parseInt(v.slice(3, 5), 16),
+        parseInt(v.slice(5, 7), 16),
+      ];
+    }
+    if (/^#[0-9a-fA-F]{3}$/.test(v)) {
+      return [
+        parseInt(v[1] + v[1], 16),
+        parseInt(v[2] + v[2], 16),
+        parseInt(v[3] + v[3], 16),
+      ];
+    }
+    return null;
+  }
+
+  function channelToLinear(c) {
+    const s = c / 255;
+    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  }
+
+  function relativeLuminance(hex) {
+    const rgb = parseHex(hex);
+    if (!rgb) return 1;
+    const [r, g, b] = rgb.map(channelToLinear);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
+  function applyLogoTokens(colors) {
+    const root = document.documentElement;
+    const dark = relativeLuminance(colors.bg) < 0.45;
+    root.style.setProperty(
+      "--sn-face",
+      dark
+        ? `color-mix(in srgb, ${colors.main} 14%, #fff9ee)`
+        : colors.bg
+    );
+    root.style.setProperty("--sn-ink", "#25213a");
+  }
+
   function applyTheme(colors) {
     const root = document.documentElement;
     const map = StThemes.CSS_VAR_MAP;
@@ -9,6 +52,7 @@ window.StTheme = (function () {
         root.style.setProperty(map[key], colors[key]);
       }
     }
+    applyLogoTokens(colors);
   }
 
   function applyFont(name) {

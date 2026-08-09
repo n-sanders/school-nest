@@ -22,6 +22,12 @@
   --error-soft: color-mix(in srgb, var(--error-color) 18%, var(--bg-color));
   --warn-soft: color-mix(in srgb, var(--colorful-error-color) 20%, var(--bg-color));
   --on-main: var(--bg-color);
+
+  /* School Nest logo tokens — face/ink also set by theme.js for luminance switch */
+  --sn-primary: var(--main-color);
+  --sn-accent: var(--colorful-error-color);
+  --sn-ink: #25213a;
+  --sn-face: var(--bg-color);
 }
 
 * { box-sizing: border-box; }
@@ -66,11 +72,45 @@ a { color: var(--caret-color); }
 }
 
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-family: var(--font-display);
   font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--main-color);
+}
+
+.schoolnest-mark {
+  width: 1.75em;
+  height: 1.75em;
+  flex-shrink: 0;
+  display: block;
+}
+
+.schoolnest-mark .sn-primary { fill: var(--sn-primary, #6557c8); }
+.schoolnest-mark .sn-accent { fill: var(--sn-accent, #f2ae3e); }
+.schoolnest-mark .sn-ink { fill: var(--sn-ink, #25213a); }
+.schoolnest-mark .sn-face { fill: var(--sn-face, #fff9ee); }
+.schoolnest-mark .sn-detail {
+  fill: none;
+  stroke: var(--sn-ink, #25213a);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (forced-colors: active) {
+  .schoolnest-mark .sn-primary,
+  .schoolnest-mark .sn-accent,
+  .schoolnest-mark .sn-ink { fill: CanvasText; }
+  .schoolnest-mark .sn-face { fill: Canvas; }
+  .schoolnest-mark .sn-detail { stroke: CanvasText; }
+}
+
+.brand-mark-lg {
+  width: 4rem;
+  height: 4rem;
 }
 
 .brand-sub {
@@ -258,6 +298,11 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   margin: 10vh auto;
 }
 
+.login-brand {
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+}
+
 .flash {
   padding: 0.65rem 0.8rem;
   margin-bottom: 0.85rem;
@@ -415,13 +460,21 @@ th, td {
 
 .theme-color-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
   gap: 0.75rem;
+}
+
+@media (min-width: 900px) {
+  /* Side-by-side theme layout: keep two columns so fields don't crowd the preview */
+  .theme-layout > div:first-child .theme-color-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .theme-color-field {
   display: grid;
   gap: 0.35rem;
+  min-width: 0;
 }
 
 .theme-color-field label {
@@ -432,6 +485,8 @@ th, td {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  min-width: 0;
+  width: 100%;
 }
 
 .theme-color-row input[type="color"] {
@@ -448,7 +503,8 @@ th, td {
 .theme-color-row input[type="text"] {
   margin: 0;
   min-width: 0;
-  flex: 1;
+  width: 100%;
+  flex: 1 1 0;
   font-family: ui-monospace, monospace;
   font-size: 0.9rem;
 }
