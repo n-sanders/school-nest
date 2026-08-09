@@ -755,3 +755,236 @@ th, td {
   input, select, textarea { min-width: 100%; width: 100%; }
   .row label { flex: 1 1 100%; }
 }
+
+/* Planner queue editor */
+.planner-intro { padding: 0.75rem 1.15rem; }
+
+.planner-intro h1 { margin-bottom: 0.15rem; }
+
+.planner-intro p { margin: 0; font-size: 0.9rem; }
+
+.planner-layout {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .planner-layout {
+    grid-template-columns: minmax(150px, 180px) 1fr;
+  }
+
+  .subject-rail {
+    position: sticky;
+    top: 1rem;
+  }
+}
+
+.subject-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+@media (min-width: 900px) {
+  .subject-chips {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.subject-chip {
+  background: var(--main-soft);
+  color: var(--text-color);
+  border: 1px solid color-mix(in srgb, var(--main-color) 35%, var(--line));
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  font-weight: 600;
+  cursor: grab;
+  text-align: center;
+}
+
+.subject-chip:hover {
+  background: color-mix(in srgb, var(--main-color) 28%, var(--bg-color));
+  color: var(--text-color);
+}
+
+.subject-chip:active { cursor: grabbing; }
+
+.subject-chip.armed {
+  background: var(--main-color);
+  color: var(--on-main);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--main-color) 40%, transparent);
+}
+
+.child-row { padding: 0.65rem 0.85rem; }
+
+.child-row-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  color: var(--text-color);
+  padding: 0.25rem 0.15rem;
+  cursor: pointer;
+  text-align: left;
+  font-weight: 400;
+}
+
+.child-row-header:hover { background: transparent; }
+
+.child-row-header:hover .child-row-name { color: var(--main-color); }
+
+.child-row-header .chevron {
+  color: var(--sub-color);
+  width: 1rem;
+  flex-shrink: 0;
+}
+
+.child-row-name {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.child-row-summary {
+  margin-left: auto;
+  font-size: 0.88rem;
+  text-align: right;
+}
+
+.child-row-body { margin-top: 0.65rem; }
+
+.day-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 0.6rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.day-slot {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.6rem;
+  background: var(--surface-strong);
+  min-height: 7.5rem;
+}
+
+.day-slot h3 {
+  font-family: var(--font-display);
+  margin: 0 0 0.45rem;
+  font-size: 0.92rem;
+}
+
+.day-slot.add {
+  border: 2px dotted color-mix(in srgb, var(--main-color) 45%, var(--line));
+  background: transparent;
+  color: var(--main-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.day-slot.add:hover { background: var(--main-soft); }
+
+.day-slot.add .add-plus {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.day-slot.placeholder {
+  border-style: dashed;
+  background: transparent;
+  opacity: 0.35;
+}
+
+.day-slot.drop-hot {
+  border-color: var(--main-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--main-color) 40%, transparent);
+  background: var(--main-soft);
+}
+
+.day-assignments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.day-assignment {
+  border-top: 1px solid var(--line);
+  padding-top: 0.45rem;
+  display: flex;
+  gap: 0.45rem;
+  justify-content: space-between;
+  align-items: start;
+  font-size: 0.85rem;
+}
+
+.day-assignment:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.day-assignment-course {
+  display: block;
+  font-weight: 700;
+}
+
+.day-assignment-name { display: block; }
+
+.day-assignment-actions {
+  display: flex;
+  gap: 0.35rem;
+  align-items: start;
+}
+
+.day-assignment-effort {
+  font-size: 0.8rem;
+  text-transform: capitalize;
+}
+
+button.slim {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.day-empty { font-size: 0.85rem; }
+
+.picker-dialog {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-color);
+  box-shadow: var(--shadow);
+  padding: 1.1rem 1.25rem;
+  width: min(92vw, 26rem);
+}
+
+.picker-dialog::backdrop {
+  background: color-mix(in srgb, var(--text-color) 35%, transparent);
+}
+
+.picker-dialog h2 {
+  font-family: var(--font-display);
+  margin: 0 0 0.35rem;
+  font-size: 1.1rem;
+}
+
+.picker-dialog form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.picker-dialog select {
+  width: 100%;
+  min-width: 0;
+}
