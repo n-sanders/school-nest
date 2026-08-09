@@ -86,6 +86,8 @@ public static class CatalogEndpoints
             };
             db.Courses.Add(course);
             await db.SaveChangesAsync();
+            CatalogDefaults.AddNextLesson(db, course.Id);
+            await db.SaveChangesAsync();
             return Results.Ok(new { course.Id, course.SubjectId, course.Name, course.SortOrder });
         });
 

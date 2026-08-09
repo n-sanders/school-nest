@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SchoolTracking.Models;
+using SchoolTracking.Services;
 
 namespace SchoolTracking.Data;
 
@@ -23,8 +24,12 @@ public static class SeedData
 
         await db.Database.EnsureCreatedAsync();
 
+        // Existing DBs: give empty courses a Next lesson so they become plannable.
         if (await db.Families.AnyAsync())
+        {
+            await CatalogDefaults.EnsureNextLessonForEmptyCoursesAsync(db);
             return;
+        }
 
         var family = new Family
         {
@@ -73,15 +78,21 @@ public static class SeedData
         var trumpet = new Course { SubjectId = music.Id, Name = "Trumpet", SortOrder = 1 };
         var flute = new Course { SubjectId = music.Id, Name = "Flute", SortOrder = 2 };
 
-        db.Courses.AddRange(
+        var courses = new[]
+        {
             gbMath3, gbMath4, mathAcademy, mathArcade,
             gbLang3, gbLang5, gbLang6,
             papaHistory, usHistory,
             scienceWeird, gbBiology, physics,
-            trumpet, flute);
+            trumpet, flute
+        };
+        db.Courses.AddRange(courses);
         await db.SaveChangesAsync();
 
-        // Partial catalog seed — parents can add more items in the Catalog UI.
+        // Every course gets a reusable Next lesson; a few keep specific extras.
+        foreach (var course in courses)
+            CatalogDefaults.AddNextLesson(db, course.Id);
+
         db.CatalogAssignments.AddRange(
             new CatalogAssignment { CourseId = flute.Id, Name = "Practice", DefaultEffort = EffortLevel.Low, SortOrder = 1 },
             new CatalogAssignment { CourseId = flute.Id, Name = "Lesson", DefaultEffort = EffortLevel.High, SortOrder = 2 },
