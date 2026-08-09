@@ -1,6 +1,6 @@
 (async function () {
   const me = await requireAuth();
-  renderTopbar(me, "theme");
+  await renderTopbar(me, "theme");
 
   const presetGrid = document.getElementById("preset-grid");
   const fontGrid = document.getElementById("font-grid");

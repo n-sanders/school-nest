@@ -49,7 +49,7 @@
 
     async function load() {
       const me = await requireAuth("student");
-      renderTopbar(me, "today");
+      await renderTopbar(me, "today");
       const flash = document.getElementById("flash");
 
       const activities = await api.get("/api/family/optional-activities");

@@ -52,7 +52,7 @@
 
     async function refresh() {
       const me = await requireAuth("parent");
-      renderTopbar(me, "planner");
+      await renderTopbar(me, "planner");
       const flash = document.getElementById("flash");
       const students = await api.get("/api/catalog/students");
       const studentSelect = document.getElementById("studentId");

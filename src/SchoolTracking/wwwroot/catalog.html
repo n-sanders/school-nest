@@ -56,7 +56,7 @@
 
     async function refresh() {
       const me = await requireAuth("parent");
-      renderTopbar(me, "catalog");
+      await renderTopbar(me, "catalog");
       const tree = await api.get("/api/catalog/tree");
       document.getElementById("tree").innerHTML = tree.map(s => `
         <div class="day-card">

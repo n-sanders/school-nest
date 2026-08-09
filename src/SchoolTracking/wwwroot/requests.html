@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Requests — SchoolTracking</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Caveat:wght@600;700&family=Comic+Neue:wght@400;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700&family=Quicksand:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/site.css" />
+  <script src="/js/themes.js"></script>
+  <script src="/js/theme.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar" id="topbar"></div>
+    <div id="flash" hidden></div>
+    <h1>Requests</h1>
+
+    <div class="panel">
+      <h2>Deferrals</h2>
+      <ul class="list" id="deferList"></ul>
+    </div>
+
+    <div class="panel">
+      <h2>Optional hours</h2>
+      <ul class="list" id="optionalList"></ul>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    async function refresh() {
+      const me = await requireAuth("parent");
+      await renderTopbar(me, "requests");
+
+      const deferItems = await api.get("/api/assignments/deferrals");
+      const deferList = document.getElementById("deferList");
+      deferList.innerHTML = deferItems.map(i => `
+        <li>
+          <div><strong>${i.studentName}</strong> — ${i.assignment.subjectName} · ${i.assignment.courseName}: ${i.assignment.name}</div>
+          <div class="muted">Day #${i.assignment.plannedDaySequence ?? "?"} · ${i.assignment.effort}</div>
+          <div class="actions">
+            <button data-approve="${i.assignment.id}" type="button">Approve slide</button>
+            <button class="danger" data-reject="${i.assignment.id}" type="button">Reject</button>
+          </div>
+        </li>
+      `).join("") || `<li class="muted">No pending deferrals.</li>`;
+
+      deferList.onclick = async (e) => {
+        const t = e.target;
+        try {
+          if (t.dataset.approve) {
+            await api.post(`/api/assignments/${t.dataset.approve}/defer/approve`, {});
+            showFlash(document.getElementById("flash"), "Deferral approved — course slid forward");
+            await refresh();
+          } else if (t.dataset.reject) {
+            await api.post(`/api/assignments/${t.dataset.reject}/defer/reject`, {});
+            showFlash(document.getElementById("flash"), "Deferral rejected");
+            await refresh();
+          }
+        } catch (err) {
+          showFlash(document.getElementById("flash"), err.message, true);
+        }
+      };
+
+      const pending = await api.get("/api/assignments/optional/pending");
+      const optionalList = document.getElementById("optionalList");
+      optionalList.innerHTML = pending.map(i => `
+        <li>
+          <div><strong>${i.studentName}</strong> — ${i.assignment.name}</div>
+          <div class="muted">${i.assignment.activityDate} · ${i.assignment.effort} · ${i.assignment.minutes} min</div>
+          <div class="actions">
+            ${effortSelect(`oe-${i.assignment.id}`, i.assignment.effort)}
+            <button class="secondary" data-effort="${i.assignment.id}" type="button">Set effort</button>
+            <button data-ack="${i.assignment.id}" type="button">Acknowledge hours</button>
+          </div>
+        </li>
+      `).join("") || `<li class="muted">Nothing waiting for acknowledgment.</li>`;
+
+      optionalList.onclick = async (e) => {
+        const t = e.target;
+        try {
+          if (t.dataset.ack) {
+            await api.post(`/api/assignments/${t.dataset.ack}/acknowledge`, {});
+            showFlash(document.getElementById("flash"), "Hours acknowledged");
+            await refresh();
+          } else if (t.dataset.effort) {
+            const id = t.dataset.effort;
+            const sel = document.querySelector(`select[name="oe-${id}"]`);
+            await api.patch(`/api/assignments/${id}/effort`, { effort: sel.value });
+            showFlash(document.getElementById("flash"), "Effort updated");
+            await refresh();
+          }
+        } catch (err) {
+          showFlash(document.getElementById("flash"), err.message, true);
+        }
+      };
+    }
+    refresh().catch(() => {});
+  </script>
+</body>
+</html>

@@ -114,6 +114,24 @@ public static class AssignmentEndpoints
             return Results.Ok(AssignmentHelpers.ToDto(assignment, assignment.Course, assignment.Course?.Subject, assignment.PlannedDay));
         });
 
+        group.MapGet("/requests/count", async (AuthService auth, HttpContext http, AppDbContext db) =>
+        {
+            var user = await http.RequireParentAsync(auth);
+            if (user is null) return Results.Empty;
+
+            var deferrals = await db.Assignments
+                .CountAsync(a => a.Student.FamilyId == user.FamilyId
+                                 && a.Status == AssignmentStatus.DeferRequested);
+
+            var optional = await db.Assignments
+                .CountAsync(a => a.Student.FamilyId == user.FamilyId
+                                 && a.Kind == AssignmentKind.Optional
+                                 && a.Status == AssignmentStatus.Completed
+                                 && a.HoursAcknowledgedAt == null);
+
+            return Results.Ok(new { count = deferrals + optional });
+        });
+
         group.MapGet("/deferrals", async (AuthService auth, HttpContext http, AppDbContext db) =>
         {
             var user = await http.RequireParentAsync(auth);

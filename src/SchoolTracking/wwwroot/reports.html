@@ -56,7 +56,7 @@
   <script>
     async function loadReport() {
       const me = await requireAuth("parent");
-      renderTopbar(me, "reports");
+      await renderTopbar(me, "reports");
 
       const students = await api.get("/api/catalog/students");
       const studentSelect = document.getElementById("studentId");

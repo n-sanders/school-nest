@@ -59,13 +59,13 @@ async function requireAuth(expectedRole) {
   return me;
 }
 
-function renderTopbar(me, active) {
+async function renderTopbar(me, active) {
   const themeLink = `<a href="/theme.html" class="${active === "theme" ? "active" : ""}">Theme</a>`;
   const parentLinks = `
     <a href="/planner.html" class="${active === "planner" ? "active" : ""}">Planner</a>
     <a href="/catalog.html" class="${active === "catalog" ? "active" : ""}">Catalog</a>
-    <a href="/deferrals.html" class="${active === "deferrals" ? "active" : ""}">Deferrals</a>
-    <a href="/optional.html" class="${active === "optional" ? "active" : ""}">Optional ack</a>
+    <a href="/requests.html" class="${active === "requests" ? "active" : ""}" id="navRequests">Requests</a>
+    <a href="/optional.html" class="${active === "optional" ? "active" : ""}">Optional</a>
     <a href="/reports.html" class="${active === "reports" ? "active" : ""}">Reports</a>
     <a href="/magic-words.html" class="${active === "magic" ? "active" : ""}">Magic words</a>
     ${themeLink}
@@ -80,7 +80,7 @@ function renderTopbar(me, active) {
     <div class="brand">SchoolTracking</div>
     <div class="nav">
       ${me.role === "parent" ? parentLinks : studentLinks}
-      <span class="muted">${me.displayName} (${me.role})</span>
+      <span class="muted">${me.displayName}</span>
       <button class="linkish" id="logoutBtn" type="button">Log out</button>
     </div>
   `;
@@ -88,6 +88,16 @@ function renderTopbar(me, active) {
     await api.post("/api/auth/logout", {});
     location.href = "/login.html";
   };
+
+  if (me.role === "parent") {
+    try {
+      const { count } = await api.get("/api/assignments/requests/count");
+      const link = document.getElementById("navRequests");
+      if (link && count > 0) {
+        link.innerHTML = `Requests <span class="nav-count">${count}</span>`;
+      }
+    } catch { /* leave nav without badge */ }
+  }
 }
 
 function showFlash(el, message, isError = false) {

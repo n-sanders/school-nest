@@ -25,7 +25,7 @@
   <script>
     async function refresh() {
       const me = await requireAuth("parent");
-      renderTopbar(me, "magic");
+      await renderTopbar(me, "magic");
       const users = await api.get("/api/family/magic-words");
       const list = document.getElementById("list");
       list.innerHTML = users.map(u => `
