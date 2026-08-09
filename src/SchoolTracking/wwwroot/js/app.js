@@ -60,6 +60,7 @@ async function requireAuth(expectedRole) {
 }
 
 function renderTopbar(me, active) {
+  const themeLink = `<a href="/theme.html" class="${active === "theme" ? "active" : ""}">Theme</a>`;
   const parentLinks = `
     <a href="/planner.html" class="${active === "planner" ? "active" : ""}">Planner</a>
     <a href="/catalog.html" class="${active === "catalog" ? "active" : ""}">Catalog</a>
@@ -67,9 +68,11 @@ function renderTopbar(me, active) {
     <a href="/optional.html" class="${active === "optional" ? "active" : ""}">Optional ack</a>
     <a href="/reports.html" class="${active === "reports" ? "active" : ""}">Reports</a>
     <a href="/magic-words.html" class="${active === "magic" ? "active" : ""}">Magic words</a>
+    ${themeLink}
   `;
   const studentLinks = `
     <a href="/index.html" class="${active === "today" ? "active" : ""}">Today</a>
+    ${themeLink}
   `;
   const el = document.getElementById("topbar");
   if (!el) return;

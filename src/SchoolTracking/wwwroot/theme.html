@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Theme — SchoolTracking</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Caveat:wght@600;700&family=Comic+Neue:wght@400;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700&family=Quicksand:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/site.css" />
+  <script src="/js/themes.js"></script>
+  <script src="/js/theme.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar" id="topbar"></div>
+    <div id="flash" hidden></div>
+
+    <p class="muted" style="margin-top:0">Pick a preset or tune your own colors. Saved on this device.</p>
+
+    <div class="theme-layout">
+      <div>
+        <section class="panel">
+          <h2>Presets</h2>
+          <p class="muted">Click a theme to apply it right away.</p>
+          <div class="theme-preset-grid" id="preset-grid"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Fonts</h2>
+          <p class="muted">Fun type for kids — applies right away.</p>
+          <div class="theme-preset-grid" id="font-grid"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Custom colors</h2>
+          <p class="muted">Adjust any color — changes apply live and save to this device.</p>
+          <div class="theme-color-grid" id="color-grid"></div>
+        </section>
+      </div>
+
+      <aside class="theme-preview-panel">
+        <section class="panel">
+          <h2>Preview</h2>
+          <div class="theme-preview-sample">
+            <div class="brand" style="font-size:1.4rem">SchoolTracking</div>
+            <p class="brand-sub">Sample greeting for the preview</p>
+
+            <div class="day-card" style="margin-top:1rem">
+              <h3>Monday planner</h3>
+              <p class="muted" style="margin:0">Math · Reading · Science</p>
+            </div>
+
+            <div class="actions">
+              <button type="button">Primary</button>
+              <button class="secondary" type="button">Secondary</button>
+              <button class="warn" type="button">Warn</button>
+              <button class="danger" type="button">Danger</button>
+            </div>
+
+            <div style="margin-bottom:0.75rem">
+              <span class="badge done">Completed</span>
+              <span class="badge pending">Deferred</span>
+              <span class="badge defer">Defer requested</span>
+              <span class="badge">Assigned</span>
+            </div>
+
+            <div class="flash">Assignment saved.</div>
+            <div class="flash error">Something went wrong with that request.</div>
+
+            <label for="preview-input">Sample field
+              <input id="preview-input" type="text" value="Catalog note" readonly />
+            </label>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script src="/js/theme-page.js"></script>
+</body>
+</html>
