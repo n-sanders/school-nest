@@ -769,15 +769,81 @@ th, td {
   align-items: start;
 }
 
+.planner-sidebar {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
 @media (min-width: 900px) {
   .planner-layout {
-    grid-template-columns: minmax(150px, 180px) 1fr;
+    grid-template-columns: minmax(160px, 200px) 1fr;
   }
 
-  .subject-rail {
+  .planner-sidebar {
     position: sticky;
     top: 1rem;
   }
+}
+
+.subject-rail h2,
+.course-rail h2 {
+  margin-bottom: 0.65rem;
+}
+
+.planner-add-subject {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.75rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 2px dotted color-mix(in srgb, var(--main-color) 45%, var(--line));
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--main-color);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.planner-add-subject:hover {
+  background: var(--main-soft);
+  color: var(--main-color);
+}
+
+.course-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.course-group {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.course-group-heading {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sub-color);
+}
+
+.course-group-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.course-group-list li {
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.1rem 0;
 }
 
 .subject-chips {

@@ -5,6 +5,7 @@
   const flash = document.getElementById("flash");
   const rowsEl = document.getElementById("childRows");
   const railEl = document.getElementById("subjectChips");
+  const courseListEl = document.getElementById("courseList");
   const dialog = document.getElementById("pickerDialog");
 
   const me = await requireAuth("parent");
@@ -147,6 +148,20 @@
       <button type="button" class="subject-chip${armedSubjectId === s.id ? " armed" : ""}"
               draggable="true" data-subject="${s.id}">${esc(s.name)}</button>
     `).join("") || `<p class="muted">No subjects with catalog assignments yet.</p>`;
+  }
+
+  function renderCourses() {
+    const blocks = tree
+      .filter(s => s.courses.length > 0)
+      .map(s => `
+        <li class="course-group">
+          <div class="course-group-heading">${esc(s.name)}</div>
+          <ul class="course-group-list">
+            ${s.courses.map(c => `<li>${esc(c.name)}</li>`).join("")}
+          </ul>
+        </li>`);
+    courseListEl.innerHTML = blocks.join("") ||
+      `<li class="muted">No courses yet. Add them in the catalog.</li>`;
   }
 
   railEl.addEventListener("click", e => {
@@ -344,6 +359,11 @@
 
   // ---- initial paint ----
 
+  document.getElementById("addSubjectBtn").onclick = () => {
+    location.href = "/catalog.html";
+  };
+
   renderChips();
+  renderCourses();
   renderRows();
 })().catch(err => console.error(err));
