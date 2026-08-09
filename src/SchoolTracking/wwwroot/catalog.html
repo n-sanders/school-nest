@@ -17,7 +17,7 @@
     <div class="topbar" id="topbar"></div>
     <div id="flash" hidden></div>
 
-    <div class="panel">
+    <div class="panel catalog-browse">
       <h1>Family catalog</h1>
       <div id="tree"></div>
     </div>
@@ -59,24 +59,29 @@
       const me = await requireAuth("parent");
       await renderTopbar(me, "catalog");
       const tree = await api.get("/api/catalog/tree");
-      document.getElementById("tree").innerHTML = tree.map(s => `
-        <div class="day-card">
-          <h3>${s.name}</h3>
-          ${s.courses.map(c => `
-            <div style="margin:0.5rem 0 0.75rem 0.5rem">
-              <strong>${c.name}</strong>
-              <ul class="list">
-                ${c.assignments.map(a => `
-                  <li>${a.name} · ${a.defaultEffort}
-                    ${a.url ? `· <a href="${a.url}" target="_blank" rel="noopener">link</a>` : ""}
-                    ${a.description ? `<div class="muted">${a.description}</div>` : ""}
-                  </li>
-                `).join("") || `<li class="muted">No assignments</li>`}
-              </ul>
-            </div>
-          `).join("") || `<p class="muted">No courses</p>`}
+      document.getElementById("tree").innerHTML = tree.length ? `
+        <div class="catalog-tree">
+          ${tree.map(s => `
+            <section class="catalog-subject">
+              <h3 class="catalog-subject-heading">${s.name}</h3>
+              ${s.courses.map(c => `
+                <div class="catalog-course">
+                  <div class="catalog-course-name">${c.name}</div>
+                  <ul class="catalog-assignments">
+                    ${c.assignments.map(a => `
+                      <li>
+                        <span>${a.name} · ${a.defaultEffort}</span>
+                        ${a.url ? ` · <a href="${a.url}" target="_blank" rel="noopener">link</a>` : ""}
+                        ${a.description ? `<div class="muted catalog-assignment-desc">${a.description}</div>` : ""}
+                      </li>
+                    `).join("") || `<li class="muted">No assignments</li>`}
+                  </ul>
+                </div>
+              `).join("") || `<p class="muted">No courses</p>`}
+            </section>
+          `).join("")}
         </div>
-      `).join("") || `<p class="muted">No subjects yet.</p>`;
+      ` : `<p class="muted">No subjects yet.</p>`;
 
       document.getElementById("courseSubject").innerHTML =
         tree.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
