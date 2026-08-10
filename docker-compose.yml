@@ -2,7 +2,7 @@ services:
   schooltracking:
     build: .
     ports:
-      - "8080:8080"
+      - "5292:8080"
     volumes:
       - schooltracking-data:/data
     environment:
