@@ -17,36 +17,44 @@
     <div class="topbar" id="topbar"></div>
     <div id="flash" hidden></div>
 
-    <div class="panel">
+    <div class="panel panel-today-required">
       <h1>Today's required work</h1>
       <p id="dayMeta" class="muted"></p>
-      <ul class="list" id="requiredList"></ul>
+      <ul class="list today-task-list" id="requiredList"></ul>
     </div>
 
-    <div class="panel">
-      <h2>Optional work</h2>
-      <ul class="list" id="optionalList"></ul>
-      <form id="optionalForm" class="row" style="margin-top:1rem">
-        <label>From optional list
-          <select id="optActivity"><option value="">— new freeform —</option></select>
-        </label>
-        <label>New name (if freeform)
-          <input id="optName" placeholder="e.g. Free reading" />
-        </label>
-        <label>Effort
+    <details class="panel panel-optional">
+      <summary class="optional-summary">
+        <span class="optional-summary-title">Optional work</span>
+        <span id="optionalCount" class="optional-summary-count muted"></span>
+      </summary>
+      <ul class="list optional-task-list" id="optionalList"></ul>
+      <form id="optionalForm" class="optional-add-card">
+        <div class="optional-add-fields">
+          <label>From optional list
+            <select id="optActivity"><option value="">— new freeform —</option></select>
+          </label>
+          <label>New name (if freeform)
+            <input id="optName" placeholder="e.g. Free reading" />
+          </label>
+        </div>
+        <div class="optional-add-side">
           <span id="optEffortWrap"></span>
-        </label>
-        <label>Date
-          <input id="optDate" type="date" />
-        </label>
-        <button type="submit">Add &amp; complete</button>
+          <button type="submit">Add &amp; complete</button>
+        </div>
       </form>
-      <p class="muted">Optional items are separate from courses. New freeform names are added to the family optional list.</p>
-    </div>
+    </details>
   </div>
   <script src="/js/app.js"></script>
   <script>
-    document.getElementById("optEffortWrap").innerHTML = effortSelect("optEffort", "low");
+    document.getElementById("optEffortWrap").innerHTML = effortToggle("optEffort", "low");
+
+    function setEffortToggle(name, value) {
+      const input = document.querySelector(`input.effort-toggle-input[name="${name}"]`);
+      if (!input) return;
+      input.checked = value === "high";
+      input.setAttribute("aria-checked", input.checked ? "true" : "false");
+    }
 
     async function load() {
       const me = await requireAuth("student");
@@ -57,83 +65,149 @@
       const activitySelect = document.getElementById("optActivity");
       activitySelect.innerHTML = `<option value="">— new freeform —</option>` +
         activities.map(a => `<option value="${a.id}" data-effort="${a.defaultEffort}">${a.name}</option>`).join("");
-      document.getElementById("optDate").value = new Date().toISOString().slice(0, 10);
+
+      const optName = document.getElementById("optName");
+
+      function syncOptionalNameField() {
+        const freeform = !activitySelect.value;
+        optName.disabled = !freeform;
+        if (!freeform) optName.value = "";
+      }
 
       activitySelect.onchange = () => {
         const opt = activitySelect.selectedOptions[0];
-        if (opt?.dataset.effort) {
-          document.querySelector('select[name="optEffort"]').value = opt.dataset.effort;
-        }
+        if (opt?.dataset.effort) setEffortToggle("optEffort", opt.dataset.effort);
+        syncOptionalNameField();
       };
+      syncOptionalNameField();
 
       const data = await api.get("/api/assignments/today");
       const dayMeta = document.getElementById("dayMeta");
       const requiredList = document.getElementById("requiredList");
       const optionalList = document.getElementById("optionalList");
+      const optionalCount = document.getElementById("optionalCount");
+
+      const optionalItems = data.optional || [];
+      optionalCount.textContent = optionalItems.length
+        ? `(${optionalItems.length} today)`
+        : "";
 
       if (!data.day) {
         dayMeta.textContent = data.message || "Nothing planned.";
         requiredList.innerHTML = "";
-        optionalList.innerHTML = "";
-        return;
+        requiredList.classList.remove("is-day-done");
+      } else {
+        const done = data.day.status === "completed";
+        dayMeta.textContent = `Day slot #${data.day.sequenceIndex} · ${data.day.status}` +
+          (done ? " — you are done with required work for this day!" : "");
+        requiredList.classList.toggle("is-day-done", done);
+
+        requiredList.innerHTML = data.assignments.map(a => {
+          const assigned = a.status === "assigned";
+          const completed = a.status === "completed";
+          const toggleDisabled = !assigned && !completed;
+          const nameHtml = a.url
+            ? `<a class="today-task-name" href="${a.url}" target="_blank" rel="noopener">${a.name}</a>`
+            : `<span class="today-task-name">${a.name}</span>`;
+          const sideAction = assigned
+            ? `<button type="button" class="today-task-defer" data-defer="${a.id}">Request deferral</button>`
+            : completed
+              ? ""
+              : `<span class="muted today-task-waiting">Waiting on parent</span>`;
+          return `
+          <li class="today-task" data-status="${a.status}" data-id="${a.id}">
+            <label class="today-task-check">
+              <input type="checkbox" class="today-task-checkbox"
+                data-complete="${a.id}"
+                ${completed ? "checked" : ""}
+                ${assigned ? "" : "disabled"}
+                aria-label="Mark ${a.name} complete" />
+              <span class="today-task-checkbox-ring" aria-hidden="true"></span>
+            </label>
+            <div class="today-task-body">
+              ${nameHtml}
+              <div class="today-task-meta muted">${a.subjectName} · ${a.courseName}</div>
+              ${a.description ? `<div class="today-task-desc muted">${a.description}</div>` : ""}
+            </div>
+            <div class="today-task-side">
+              ${effortToggle(`effort-${a.id}`, a.effort, { disabled: toggleDisabled })}
+              ${sideAction}
+            </div>
+          </li>`;
+        }).join("") || `<li class="muted">No required assignments on this day.</li>`;
       }
 
-      const done = data.day.status === "completed";
-      dayMeta.textContent = `Day slot #${data.day.sequenceIndex} · ${data.day.status}` +
-        (done ? " — you are done with required work for this day!" : "");
-
-      requiredList.innerHTML = data.assignments.map(a => `
-        <li>
-          <div><strong>${a.subjectName} · ${a.courseName}</strong> — ${a.name} ${statusBadge(a.status)}</div>
-          <div class="muted">${a.description || ""} ${a.url ? `· <a href="${a.url}" target="_blank" rel="noopener">resource</a>` : ""}</div>
-          <div class="actions">
-            ${a.status === "assigned" ? `
-              ${effortSelect(`effort-${a.id}`, a.effort)}
-              <button data-complete="${a.id}" type="button">Complete</button>
-              <button class="warn" data-defer="${a.id}" type="button">Request deferral</button>
-            ` : a.status === "completed" ? `
-              ${effortSelect(`effort-${a.id}`, a.effort)}
-              <button class="secondary" data-effort="${a.id}" type="button">Update effort</button>
-            ` : `<span class="muted">Waiting on parent</span>`}
+      optionalList.innerHTML = optionalItems.map(a => {
+        const statusNote = a.countsTowardHours
+          ? "Hours counted"
+          : a.status === "completed"
+            ? "Awaiting parent to approve"
+            : "Not completed";
+        const action = a.status === "assigned"
+          ? `<button data-complete="${a.id}" type="button">Complete</button>`
+          : `<button class="secondary" data-effort="${a.id}" type="button">Update effort</button>`;
+        return `
+        <li class="optional-task" data-status="${a.status}" data-id="${a.id}">
+          <div class="optional-task-body">
+            <span class="optional-task-name">${a.name}</span>
+            <div class="optional-task-meta muted">${statusNote}</div>
           </div>
-        </li>
-      `).join("") || `<li class="muted">No required assignments on this day.</li>`;
-
-      optionalList.innerHTML = (data.optional || []).map(a => `
-        <li>
-          <div><strong>${a.name}</strong> ${statusBadge(a.status)}
-            ${a.countsTowardHours ? '<span class="badge done">hours counted</span>' : a.status === "completed" ? '<span class="badge pending">awaiting parent ack</span>' : ""}
+          <div class="optional-task-side">
+            ${effortToggle(`opt-effort-${a.id}`, a.effort)}
+            ${action}
           </div>
-          <div class="muted">${a.courseName} · ${a.effort} · ${a.activityDate || ""}</div>
-          <div class="actions">
-            ${a.status === "assigned" ? `
-              ${effortSelect(`opt-effort-${a.id}`, a.effort)}
-              <button data-complete="${a.id}" type="button">Complete</button>
-            ` : `
-              ${effortSelect(`opt-effort-${a.id}`, a.effort)}
-              <button class="secondary" data-effort="${a.id}" type="button">Update effort</button>
-            `}
-          </div>
-        </li>
-      `).join("") || `<li class="muted">No optional work logged for today.</li>`;
+        </li>`;
+      }).join("") || `<li class="muted">No optional work logged for today.</li>`;
 
-      requiredList.onclick = optionalList.onclick = async (e) => {
+      requiredList.onclick = async (e) => {
+        const deferBtn = e.target.closest("[data-defer]");
+        if (!deferBtn || !requiredList.contains(deferBtn)) return;
+        try {
+          await api.post(`/api/assignments/${deferBtn.dataset.defer}/defer`, {});
+          showFlash(flash, "Deferral requested");
+          await load();
+        } catch (err) {
+          showFlash(flash, err.message, true);
+        }
+      };
+
+      requiredList.onchange = async (e) => {
+        const t = e.target;
+        try {
+          if (t.classList.contains("today-task-checkbox") && t.dataset.complete && t.checked) {
+            const id = t.dataset.complete;
+            const effortInput = requiredList.querySelector(`input.effort-toggle-input[name="effort-${id}"]`);
+            await api.post(`/api/assignments/${id}/complete`, { effort: effortToggleValue(effortInput) });
+            showFlash(flash, "Marked complete");
+            await load();
+          } else if (t.classList.contains("effort-toggle-input") && t.name?.startsWith("effort-")) {
+            t.setAttribute("aria-checked", t.checked ? "true" : "false");
+            const card = t.closest(".today-task");
+            if (card?.dataset.status === "completed") {
+              const id = t.name.slice("effort-".length);
+              await api.patch(`/api/assignments/${id}/effort`, { effort: effortToggleValue(t) });
+              showFlash(flash, "Effort updated");
+            }
+          }
+        } catch (err) {
+          showFlash(flash, err.message, true);
+          await load();
+        }
+      };
+
+      optionalList.onclick = async (e) => {
         const t = e.target;
         try {
           if (t.dataset.complete) {
             const id = t.dataset.complete;
-            const sel = document.querySelector(`select[name="effort-${id}"], select[name="opt-effort-${id}"]`);
-            await api.post(`/api/assignments/${id}/complete`, { effort: sel?.value });
+            const effortInput = optionalList.querySelector(`input.effort-toggle-input[name="opt-effort-${id}"]`);
+            await api.post(`/api/assignments/${id}/complete`, { effort: effortToggleValue(effortInput) });
             showFlash(flash, "Marked complete");
-            await load();
-          } else if (t.dataset.defer) {
-            await api.post(`/api/assignments/${t.dataset.defer}/defer`, {});
-            showFlash(flash, "Deferral requested");
             await load();
           } else if (t.dataset.effort) {
             const id = t.dataset.effort;
-            const sel = document.querySelector(`select[name="effort-${id}"], select[name="opt-effort-${id}"]`);
-            await api.patch(`/api/assignments/${id}/effort`, { effort: sel.value });
+            const effortInput = optionalList.querySelector(`input.effort-toggle-input[name="opt-effort-${id}"]`);
+            await api.patch(`/api/assignments/${id}/effort`, { effort: effortToggleValue(effortInput) });
             showFlash(flash, "Effort updated");
             await load();
           }
@@ -149,8 +223,7 @@
       try {
         const activityId = document.getElementById("optActivity").value;
         const body = {
-          effort: document.querySelector('select[name="optEffort"]').value,
-          activityDate: document.getElementById("optDate").value,
+          effort: effortToggleValue(document.querySelector('input.effort-toggle-input[name="optEffort"]')),
           completeImmediately: true
         };
         if (activityId) {

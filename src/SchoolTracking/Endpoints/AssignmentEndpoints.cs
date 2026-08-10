@@ -397,21 +397,41 @@ public static class AssignmentEndpoints
 
     private static async Task<PlannedDay?> GetOrActivateCurrentDayAsync(AppDbContext db, int studentId)
     {
-        var day = await db.PlannedDays
-            .Where(d => d.StudentUserId == studentId && d.Status != PlannedDayStatus.Completed)
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
+        var inProgress = await db.PlannedDays
+            .Where(d => d.StudentUserId == studentId && d.Status == PlannedDayStatus.InProgress)
             .OrderBy(d => d.SequenceIndex)
             .FirstOrDefaultAsync();
+        if (inProgress is not null)
+            return inProgress;
 
-        if (day is null)
-            return null;
+        // Keep showing a day completed today so the student still sees what they finished.
+        var completedToday = await db.PlannedDays
+            .Where(d => d.StudentUserId == studentId
+                        && d.Status == PlannedDayStatus.Completed
+                        && d.CalendarDate == today)
+            .OrderByDescending(d => d.SequenceIndex)
+            .FirstOrDefaultAsync();
+        if (completedToday is not null)
+            return completedToday;
 
-        if (day.Status == PlannedDayStatus.Planned)
+        var planned = await db.PlannedDays
+            .Where(d => d.StudentUserId == studentId && d.Status == PlannedDayStatus.Planned)
+            .OrderBy(d => d.SequenceIndex)
+            .FirstOrDefaultAsync();
+        if (planned is not null)
         {
-            day.Status = PlannedDayStatus.InProgress;
+            planned.Status = PlannedDayStatus.InProgress;
             await db.SaveChangesAsync();
+            return planned;
         }
 
-        return day;
+        // No further planned work — fall back to the most recent completed day.
+        return await db.PlannedDays
+            .Where(d => d.StudentUserId == studentId && d.Status == PlannedDayStatus.Completed)
+            .OrderByDescending(d => d.SequenceIndex)
+            .FirstOrDefaultAsync();
     }
 
     public record CompleteRequest(string? Effort);

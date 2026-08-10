@@ -39,6 +39,23 @@ function effortSelect(name, selected = "low") {
   </select>`;
 }
 
+/** Low/High switch for Today required-task cards. Checked = high. */
+function effortToggle(name, selected = "low", { disabled = false } = {}) {
+  const high = selected === "high";
+  return `<label class="effort-toggle${disabled ? " is-disabled" : ""}">
+    <span class="effort-toggle-label">Low</span>
+    <input type="checkbox" class="effort-toggle-input" name="${name}" value="high"
+      ${high ? "checked" : ""} ${disabled ? "disabled" : ""}
+      role="switch" aria-checked="${high ? "true" : "false"}" />
+    <span class="effort-toggle-track" aria-hidden="true"><span class="effort-toggle-thumb"></span></span>
+    <span class="effort-toggle-label">High</span>
+  </label>`;
+}
+
+function effortToggleValue(input) {
+  return input?.checked ? "high" : "low";
+}
+
 function statusBadge(status) {
   const map = {
     assigned: ["Assigned", ""],
