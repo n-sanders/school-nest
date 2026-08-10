@@ -106,9 +106,10 @@
           const assigned = a.status === "assigned";
           const completed = a.status === "completed";
           const toggleDisabled = !assigned && !completed;
+          const title = `${a.courseName} · ${a.name}`;
           const nameHtml = a.url
-            ? `<a class="today-task-name" href="${a.url}" target="_blank" rel="noopener">${a.name}</a>`
-            : `<span class="today-task-name">${a.name}</span>`;
+            ? `<a class="today-task-name" href="${a.url}" target="_blank" rel="noopener">${title}</a>`
+            : `<span class="today-task-name">${title}</span>`;
           const sideAction = assigned
             ? `<button type="button" class="today-task-defer" data-defer="${a.id}">Request deferral</button>`
             : completed
@@ -121,12 +122,12 @@
                 data-complete="${a.id}"
                 ${completed ? "checked" : ""}
                 ${assigned ? "" : "disabled"}
-                aria-label="Mark ${a.name} complete" />
+                aria-label="Mark ${title} complete" />
               <span class="today-task-checkbox-ring" aria-hidden="true"></span>
             </label>
             <div class="today-task-body">
               ${nameHtml}
-              <div class="today-task-meta muted">${a.subjectName} · ${a.courseName}</div>
+              <div class="today-task-meta muted">${a.subjectName}</div>
               ${a.description ? `<div class="today-task-desc muted">${a.description}</div>` : ""}
             </div>
             <div class="today-task-side">
