@@ -8,6 +8,14 @@ services:
     environment:
       Database__Path: /data/school.db
       ASPNETCORE_URLS: http://+:8080
+    networks:
+      - default
+      - web-core_default
 
 volumes:
   schooltracking-data:
+
+networks:
+  web-core_default:
+    external: true
+
