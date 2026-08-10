@@ -2,7 +2,7 @@
 
 School Nest is a self-hosted homeschool tracker: parents build a catalog and ordered day slots; students complete or defer work and log optional hours; parents approve requests and track compliance hours.
 
-Screenshots in this folder were captured from a live local run. At capture time the catalog had content but **no planned days** for Evie, so Planner / Today / Requests show empty states.
+Screenshots in this folder were captured from a live local run (1920×1080) against the Development DB. At capture time the catalog was seeded, several students had planned days, Evie’s current day was completed, and Requests showed one pending optional-hours acknowledgment.
 
 | File | Page |
 |------|------|
@@ -42,13 +42,13 @@ Auth is profile pick + magic word. `/deferrals.html` redirects to `/requests.htm
 ## End-to-end workflows
 
 1. **Curriculum setup (parent):** Catalog → add Subject → Course → catalog assignment (name, URL, default effort, description).
-2. **Schedule required work (parent):** Planner → pick student → Add planned day → Assign from catalog (MVP: one required assignment per course per day).
-3. **Do school (student):** Today → Complete (with effort) or Request deferral; optionally log freeform/list optional → Add & complete.
+2. **Schedule required work (parent):** Planner → expand a student → Add day → drag/click a subject (or course) onto a day card → pick assignment + effort in the dialog (MVP: one required assignment per course per day).
+3. **Do school (student):** Today → Complete (with effort) or Request deferral; optionally expand Optional work → list or freeform + effort → Add & complete.
 4. **Parent inbox:** Requests → approve/reject deferrals; acknowledge optional hours (optionally adjust effort first).
 5. **Parent logs optional for a kid:** Optional → student + activity + effort + date → Add completed optional → still needs Requests ack for hours.
 6. **Compliance:** Reports → date range + student → hours vs family yearly target; day calendar of full/active days.
 7. **Access:** Magic words — parent can change own + all students; cannot change other parents’ words.
-8. **Look & feel:** Theme — presets/fonts/custom colors, device-local.
+8. **Look & feel:** Theme — fonts, presets, custom colors + live preview; device-local.
 
 ---
 
@@ -68,7 +68,7 @@ Auth is profile pick + magic word. `/deferrals.html` redirects to `/requests.htm
 
 **Purpose:** Build each student’s ordered day slots and attach required catalog work.
 
-**Workflow:** Select student → Add planned day → Assign day + catalog item + effort. Per assignment: Set effort / Remove (if day not completed). Empty until days exist.
+**Workflow:** Subject/course rails on the left; per-student day rows on the right. Add a day card, then drag a subject onto it (or click subject, then day) and choose course, assignment, and effort. Empty days say “Drop a subject here.”
 
 ![Planner](02-planner.png)
 
@@ -101,7 +101,7 @@ Auth is profile pick + magic word. `/deferrals.html` redirects to `/requests.htm
 
 **Purpose:** Parent logs completed optional work for a student.
 
-**Workflow:** Student + list item or freeform name + effort + date → Add completed optional → still needs Requests ack. Freeform names join the family optional list.
+**Workflow:** Student + list item or freeform name + effort + date → Add completed optional → still needs Requests ack. Freeform names join the family optional list. Seeded list includes Free reading, Nature walk, Extra practice.
 
 ![Optional](05-optional.png)
 
@@ -129,9 +129,9 @@ Auth is profile pick + magic word. `/deferrals.html` redirects to `/requests.htm
 
 ### 8. Theme (both) — `/theme.html`
 
-**Purpose:** Device-local appearance (presets, kid fonts, custom colors + live preview).
+**Purpose:** Device-local appearance (fonts, color presets, custom colors + live preview).
 
-**Workflow:** Click preset/font or tweak colors; applies immediately, stored on device. Same page; nav differs by role.
+**Workflow:** Click a font or preset, or tweak custom colors; applies immediately and stores on this device. Same page; nav differs by role.
 
 ![Theme parent](08-theme.png)
 
@@ -146,7 +146,7 @@ Auth is profile pick + magic word. `/deferrals.html` redirects to `/requests.htm
 **Workflows:**
 
 - Required: Complete (with effort) or Request deferral; after complete, Update effort. Defer pending → “Waiting on parent”.
-- Optional: list or freeform + effort + date → Add & complete (hours await parent ack).
+- Optional: expand Optional work → list or freeform + effort → Add & complete (hours await parent ack).
 
 Empty state when no planned days: *“Ask a parent to plan work.”*
 
@@ -156,6 +156,10 @@ Empty state when no planned days: *“Ask a parent to plan work.”*
 
 ## Audit notes from capture pass
 
-- Catalog is populated (Math, Language, History, Science, Music); **no planned days** in the DB used for screenshots, so student Today and parent Requests are empty.
-- Optional list dropdowns showed only “new freeform” (no seeded optional activities).
+- Catalog is populated (Math, Language, History, Science, Music) with seeded courses/assignments.
+- Planned days exist for Evie, Hannah, and Judah; Ezra and Noah have none in the planner summary.
+- Evie’s Today shows day slot #1 completed (Math Academy 30 XP + G&B Biology Lesson 1); Reports for Evie shows 1 full day / 1 hour in range.
+- Requests badge = 1: pending optional hours for **Ezra — Nature walk** (no pending deferrals).
+- Optional list is seeded (Free reading, Nature walk, Extra practice) plus “— new freeform —”.
 - Parent Optional and student Today both create optional work that still needs Requests acknowledgment for hour credit.
+- Theme offers kid fonts (Classic, Roundabout, Comic Book, Bubble Gum, Scribbles), color presets, custom colors, and a live preview panel.
