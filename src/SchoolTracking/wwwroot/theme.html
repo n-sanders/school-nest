@@ -47,9 +47,56 @@
             <div class="brand" style="font-size:1.4rem" id="previewBrand"></div>
             <p class="brand-sub">Sample greeting for the preview</p>
 
-            <div class="day-card" style="margin-top:1rem">
-              <h3>Monday planner</h3>
-              <p class="muted" style="margin:0">Math · Reading · Science</p>
+            <div class="panel-today-required theme-preview-today">
+              <h1>Today's required work</h1>
+              <p class="muted">Day slot #1 · in progress</p>
+              <ul class="list today-task-list">
+                <li class="today-task" data-status="assigned">
+                  <label class="today-task-check">
+                    <input type="checkbox" class="today-task-checkbox" aria-label="Mark 30 XP complete" />
+                    <span class="today-task-checkbox-ring" aria-hidden="true"></span>
+                  </label>
+                  <div class="today-task-body">
+                    <span class="today-task-name">30 XP</span>
+                    <div class="today-task-meta muted">Math · Math Academy</div>
+                  </div>
+                  <div class="today-task-side">
+                    <span id="previewEffortAssigned"></span>
+                    <button type="button" class="today-task-defer">Request deferral</button>
+                  </div>
+                </li>
+                <li class="today-task" data-status="completed">
+                  <label class="today-task-check">
+                    <input type="checkbox" class="today-task-checkbox" checked disabled aria-label="Lesson 1 complete" />
+                    <span class="today-task-checkbox-ring" aria-hidden="true"></span>
+                  </label>
+                  <div class="today-task-body">
+                    <a class="today-task-name" href="#" onclick="return false">Lesson 1</a>
+                    <div class="today-task-meta muted">Science · G&amp;B Biology</div>
+                    <div class="today-task-desc muted">Read pages 12–15</div>
+                  </div>
+                  <div class="today-task-side">
+                    <span id="previewEffortDone"></span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <div class="optional-add-card theme-preview-optional-add">
+              <div class="optional-add-fields">
+                <label>From optional list
+                  <select disabled>
+                    <option>— new freeform —</option>
+                  </select>
+                </label>
+                <label>New name (if freeform)
+                  <input type="text" value="Free reading" readonly />
+                </label>
+              </div>
+              <div class="optional-add-side">
+                <span id="previewEffortOptional"></span>
+                <button type="button">Add &amp; complete</button>
+              </div>
             </div>
 
             <div class="actions">
@@ -68,10 +115,6 @@
 
             <div class="flash">Assignment saved.</div>
             <div class="flash error">Something went wrong with that request.</div>
-
-            <label for="preview-input">Sample field
-              <input id="preview-input" type="text" value="Catalog note" readonly />
-            </label>
           </div>
         </section>
       </aside>

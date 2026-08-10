@@ -5,6 +5,10 @@
   document.getElementById("previewBrand").innerHTML =
     `${snLogo()}<span>School Nest</span>`;
 
+  document.getElementById("previewEffortAssigned").innerHTML = effortToggle("preview-effort-a", "low");
+  document.getElementById("previewEffortDone").innerHTML = effortToggle("preview-effort-b", "high");
+  document.getElementById("previewEffortOptional").innerHTML = effortToggle("preview-effort-opt", "low");
+
   const presetGrid = document.getElementById("preset-grid");
   const fontGrid = document.getElementById("font-grid");
   const colorGrid = document.getElementById("color-grid");
