@@ -50,15 +50,49 @@
         <button type="submit">Add assignment</button>
       </form>
     </div>
+
+    <dialog id="editAssignmentDialog" class="picker-dialog">
+      <form id="editAssignmentForm">
+        <h2>Edit assignment</h2>
+        <p class="muted" id="editAssignmentCourse"></p>
+        <label>Name <input id="editAssignmentName" required /></label>
+        <label>URL <input id="editAssignmentUrl" placeholder="https://..." /></label>
+        <label>Default effort <span id="editAssignmentEffortWrap"></span></label>
+        <label>Description <textarea id="editAssignmentDesc"></textarea></label>
+        <div class="actions">
+          <button type="submit">Save</button>
+          <button type="button" class="secondary" id="editAssignmentCancel">Cancel</button>
+          <button type="button" class="danger" id="editAssignmentDelete">Delete</button>
+        </div>
+      </form>
+    </dialog>
   </div>
   <script src="/js/app.js"></script>
   <script>
     document.getElementById("itemEffortWrap").innerHTML = effortSelect("itemEffort", "low");
+    document.getElementById("editAssignmentEffortWrap").innerHTML = effortSelect("editAssignmentEffort", "low");
+
+    const editDialog = document.getElementById("editAssignmentDialog");
+    const editForm = document.getElementById("editAssignmentForm");
+    let editingId = null;
+    let assignmentsById = {};
 
     async function refresh() {
       const me = await requireAuth("parent");
       await renderTopbar(me, "catalog");
       const tree = await api.get("/api/catalog/tree");
+      assignmentsById = {};
+      for (const s of tree) {
+        for (const c of s.courses) {
+          for (const a of c.assignments) {
+            assignmentsById[a.id] = {
+              ...a,
+              courseLabel: `${s.name} / ${c.name}`
+            };
+          }
+        }
+      }
+
       document.getElementById("tree").innerHTML = tree.length ? `
         <div class="catalog-tree">
           ${tree.map(s => `
@@ -70,8 +104,13 @@
                   <ul class="catalog-assignments">
                     ${c.assignments.map(a => `
                       <li>
-                        <span>${a.name} · ${a.defaultEffort}</span>
-                        ${a.url ? ` · <a href="${a.url}" target="_blank" rel="noopener">link</a>` : ""}
+                        <div class="catalog-assignment-row">
+                          <span class="catalog-assignment-main">
+                            <span>${a.name} · ${a.defaultEffort}</span>
+                            ${a.url ? ` · <a href="${a.url}" target="_blank" rel="noopener">link</a>` : ""}
+                          </span>
+                          <button type="button" class="secondary slim catalog-edit-btn" data-edit="${a.id}" title="Edit assignment" aria-label="Edit assignment">✎</button>
+                        </div>
                         ${a.description ? `<div class="muted catalog-assignment-desc">${a.description}</div>` : ""}
                       </li>
                     `).join("") || `<li class="muted">No assignments</li>`}
@@ -94,6 +133,51 @@
       }
       document.getElementById("itemCourse").innerHTML = courseOptions.join("");
     }
+
+    function openEditDialog(id) {
+      const a = assignmentsById[id];
+      if (!a) return;
+      editingId = id;
+      document.getElementById("editAssignmentCourse").textContent = a.courseLabel;
+      document.getElementById("editAssignmentName").value = a.name || "";
+      document.getElementById("editAssignmentUrl").value = a.url || "";
+      document.getElementById("editAssignmentDesc").value = a.description || "";
+      document.getElementById("editAssignmentEffortWrap").innerHTML = effortSelect("editAssignmentEffort", a.defaultEffort || "low");
+      editDialog.showModal();
+    }
+
+    document.getElementById("tree").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-edit]");
+      if (!btn) return;
+      openEditDialog(Number(btn.dataset.edit));
+    });
+
+    document.getElementById("editAssignmentCancel").onclick = () => editDialog.close();
+
+    editForm.onsubmit = async (e) => {
+      e.preventDefault();
+      if (editingId == null) return;
+      try {
+        await api.put(`/api/catalog/assignments/${editingId}`, {
+          name: document.getElementById("editAssignmentName").value,
+          url: document.getElementById("editAssignmentUrl").value,
+          description: document.getElementById("editAssignmentDesc").value,
+          defaultEffort: document.querySelector('select[name="editAssignmentEffort"]').value
+        });
+        editDialog.close();
+        await refresh();
+      } catch (err) { showFlash(document.getElementById("flash"), err.message, true); }
+    };
+
+    document.getElementById("editAssignmentDelete").onclick = async () => {
+      if (editingId == null) return;
+      if (!confirm("Delete this catalog assignment? This cannot be undone.")) return;
+      try {
+        await api.del(`/api/catalog/assignments/${editingId}`);
+        editDialog.close();
+        await refresh();
+      } catch (err) { showFlash(document.getElementById("flash"), err.message, true); }
+    };
 
     document.getElementById("subjectForm").onsubmit = async (e) => {
       e.preventDefault();

@@ -1562,6 +1562,23 @@ button.slim {
   display: block;
 }
 
+.catalog-assignment-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.catalog-assignment-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.catalog-edit-btn {
+  flex: none;
+  line-height: 1;
+  padding: 0.15rem 0.4rem;
+}
+
 .catalog-assignment-desc {
   font-size: 0.8rem;
   margin-top: 0.05rem;

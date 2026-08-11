@@ -159,6 +159,25 @@ public static class CatalogEndpoints
             return Results.Ok(new { item.Id, ok = true });
         });
 
+        group.MapDelete("/assignments/{id:int}", async (int id, AuthService auth, HttpContext http, AppDbContext db) =>
+        {
+            var user = await http.RequireParentAsync(auth);
+            if (user is null) return Results.Empty;
+
+            var item = await db.CatalogAssignments.Include(a => a.Course).ThenInclude(c => c.Subject)
+                .FirstOrDefaultAsync(a => a.Id == id && a.Course.Subject.FamilyId == user.FamilyId);
+            if (item is null)
+                return Results.NotFound();
+
+            var inUse = await db.Assignments.AnyAsync(a => a.CatalogAssignmentId == id);
+            if (inUse)
+                return Results.Conflict(new { error = "Cannot delete this catalog assignment because it is already on a student's plan or was completed by a student." });
+
+            db.CatalogAssignments.Remove(item);
+            await db.SaveChangesAsync();
+            return Results.Ok(new { ok = true });
+        });
+
         group.MapGet("/students", async (AuthService auth, HttpContext http, AppDbContext db) =>
         {
             var user = await http.RequireParentAsync(auth);
