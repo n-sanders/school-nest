@@ -113,6 +113,7 @@ async function renderTopbar(me, active) {
     <a href="/requests.html" class="${active === "requests" ? "active" : ""}" id="navRequests">Requests</a>
     <a href="/optional.html" class="${active === "optional" ? "active" : ""}">Optional</a>
     <a href="/reports.html" class="${active === "reports" ? "active" : ""}">Reports</a>
+    <a href="/adjustments.html" class="${active === "adjustments" ? "active" : ""}">Adjustments</a>
     <a href="/magic-words.html" class="${active === "magic" ? "active" : ""}">Magic words</a>
     ${themeLink}
   `;

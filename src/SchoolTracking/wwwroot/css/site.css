@@ -1207,6 +1207,79 @@ th, td {
   .row label { flex: 1 1 100%; }
 }
 
+/* Adjustments (parent completion editor) */
+.adjust-subhead {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  margin: 1.1rem 0 0.35rem;
+  color: var(--text-color);
+}
+
+.adjust-day-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.adjust-day-head h2 { margin: 0 0 0.25rem; }
+
+.adjust-day-controls,
+.adjust-asg-controls {
+  margin-top: 0.35rem;
+}
+
+.adjust-toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.adjust-toggle input {
+  width: 1.1rem;
+  height: 1.1rem;
+  min-width: 0;
+  accent-color: var(--main-color);
+}
+
+.adjust-day-picker li {
+  padding: 0.35rem 0;
+}
+
+.adjust-day-picker button {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  text-align: left;
+  background: transparent;
+  color: var(--text-color);
+  border: 1px solid transparent;
+  box-shadow: none;
+  padding: 0.55rem 0.65rem;
+  border-radius: calc(var(--radius) - 2px);
+}
+
+.adjust-day-picker button:hover {
+  background: color-mix(in srgb, var(--sub-alt-color) 70%, transparent);
+  border-color: var(--line);
+}
+
+.adjust-day-pick.is-active button {
+  background: var(--main-soft);
+  border-color: color-mix(in srgb, var(--main-color) 28%, var(--line));
+}
+
+.adjust-asg-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 /* Planner queue editor */
 .planner-intro { padding: 0.75rem 1.15rem; }
 

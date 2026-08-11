@@ -33,5 +33,6 @@ app.MapCatalogEndpoints();
 app.MapPlannerEndpoints();
 app.MapAssignmentEndpoints();
 app.MapReportEndpoints();
+app.MapCorrectionEndpoints();
 
 app.Run();

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Adjustments — School Nest</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Caveat:wght@600;700&family=Chewy&family=Comic+Neue:wght@400;700&family=Courier+Prime:wght@400;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Fredoka:wght@500;600;700&family=Lora:wght@400;600;700&family=Nunito:wght@400;600;700&family=Patrick+Hand&family=Quicksand:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/site.css" />
+  <link rel="icon" type="image/svg+xml" href="/img/schoolnest.svg" />
+  <script src="/js/themes.js"></script>
+  <script src="/js/theme.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar" id="topbar"></div>
+    <div id="flash" hidden></div>
+
+    <div class="panel">
+      <h1>Adjustments</h1>
+      <p class="muted">
+        Fix completion and calendar dates when something was marked on the wrong day.
+        Day and assignment toggles are independent. Un-completing a day unlocks planner edits;
+        student Today prefers an in-progress day or a day completed on today’s calendar date.
+      </p>
+      <form id="filters" class="row">
+        <label>Student <select id="studentId" required></select></label>
+        <label>Around date <input id="around" type="date" required /></label>
+        <button type="submit">Refresh</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Recent days</h2>
+      <p class="muted">Pick a planned-day slot near the date above (completed, in progress, or nearby planned).</p>
+      <ul class="list adjust-day-picker" id="dayPicker"></ul>
+    </div>
+
+    <div class="panel" id="dayPanel" hidden>
+      <div class="adjust-day-head">
+        <div>
+          <h2 id="dayTitle">Day</h2>
+          <div class="muted" id="dayMeta"></div>
+        </div>
+        <span class="badge" id="dayStatusBadge"></span>
+      </div>
+      <div class="row adjust-day-controls">
+        <label class="adjust-toggle">
+          <span>Full-day done</span>
+          <input id="dayDone" type="checkbox" />
+        </label>
+        <label>Calendar date
+          <input id="dayCalendarDate" type="date" />
+        </label>
+        <button class="secondary" id="saveDayDate" type="button">Save date</button>
+      </div>
+      <h3 class="adjust-subhead">Assignments</h3>
+      <ul class="list" id="assignmentList"></ul>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script src="/js/adjustments.js"></script>
+</body>
+</html>
