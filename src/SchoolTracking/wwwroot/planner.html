@@ -29,10 +29,20 @@
           <div class="subject-chips" id="subjectChips"></div>
           <button type="button" class="planner-add-subject" id="addSubjectBtn">+ subject</button>
         </div>
-        <div class="panel course-rail">
-          <h2>Courses</h2>
-          <ul class="course-list" id="courseList"></ul>
+        <div class="panel template-rail">
+          <h2>Day plan</h2>
+          <div class="template-chip-wrap">
+            <button type="button" class="template-chip" id="templateChip" draggable="true">Day plan</button>
+          </div>
+          <p class="muted template-hint">Drop on a day to add that kid's plan.</p>
+          <button type="button" class="planner-add-subject" id="editTemplateBtn">edit plans</button>
         </div>
+        <details class="panel course-rail" id="courseRail">
+          <summary class="course-rail-summary">
+            <span class="course-rail-title">Courses</span>
+          </summary>
+          <ul class="course-list" id="courseList"></ul>
+        </details>
       </aside>
       <div id="childRows"></div>
     </div>
@@ -53,6 +63,23 @@
         <div class="actions">
           <button type="submit" id="pickerSubmit">Add</button>
           <button type="button" class="secondary" id="pickerCancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="templateDialog" class="picker-dialog template-dialog">
+      <form id="templateForm">
+        <h2>Edit day plan</h2>
+        <label>Kid
+          <select id="templateStudent"></select>
+        </label>
+        <div class="template-items" id="templateItems"></div>
+        <p class="muted" id="templateNote" hidden></p>
+        <button type="button" class="planner-add-subject template-add-item" id="templateAddItem">+ add item</button>
+        <div class="actions">
+          <button type="submit" id="templateSave">Save</button>
+          <button type="button" class="secondary" id="templateCancel">Cancel</button>
+          <button type="button" class="danger" id="templateClear">Clear plan</button>
         </div>
       </form>
     </dialog>

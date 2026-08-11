@@ -1,5 +1,8 @@
 (async function () {
   const OPEN_KEY = "schooltracking-planner-open";
+  const LAST_KEY = "schooltracking-planner-last";
+  const TEMPLATE_KEY = "schooltracking-planner-template";
+  const COURSE_RAIL_KEY = "schooltracking-planner-courserail";
   const SLOTS = 5;
 
   const flash = document.getElementById("flash");
@@ -20,6 +23,44 @@
   const subjects = tree.filter(s => s.courses.some(c => c.assignments.length > 0));
   const subjectById = {};
   for (const s of tree) subjectById[s.id] = s;
+
+  // Flat lookup: catalog assignment id -> { subject, course, assignment }.
+  const catalogById = {};
+  for (const s of tree) {
+    for (const c of s.courses) {
+      for (const a of c.assignments) catalogById[a.id] = { subject: s, course: c, assignment: a };
+    }
+  }
+
+  function readJson(key, fallback) {
+    try {
+      return JSON.parse(localStorage.getItem(key)) ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  // ---- last course/assignment picked per kid + subject ----
+
+  const lastPicks = readJson(LAST_KEY, {});
+
+  function rememberPick(studentId, subjectId, courseId, catalogAssignmentId, effort) {
+    (lastPicks[studentId] ??= {})[subjectId] = { courseId, catalogAssignmentId, effort };
+    localStorage.setItem(LAST_KEY, JSON.stringify(lastPicks));
+  }
+
+  // ---- per-kid day-plan templates ----
+  // Shape: { [studentId]: [{ catalogAssignmentId, effort }] }, pruned against the live catalog.
+
+  const templates = readJson(TEMPLATE_KEY, {});
+  for (const key of Object.keys(templates)) {
+    const items = Array.isArray(templates[key]) ? templates[key] : [];
+    templates[key] = items.filter(t => t && catalogById[t.catalogAssignmentId]);
+  }
+
+  function persistTemplates() {
+    localStorage.setItem(TEMPLATE_KEY, JSON.stringify(templates));
+  }
 
   const daysByStudent = {};
   await Promise.all(students.map(async s => {
@@ -142,6 +183,13 @@
   // ---- subject chips (drag source + click-to-arm fallback) ----
 
   let armedSubjectId = null;
+  let armedTemplate = false;
+  const templateChip = document.getElementById("templateChip");
+
+  function setArmedTemplate(value) {
+    armedTemplate = value;
+    templateChip.classList.toggle("armed", value);
+  }
 
   function renderChips() {
     railEl.innerHTML = subjects.map(s => `
@@ -169,6 +217,7 @@
     if (!chip) return;
     const id = Number(chip.dataset.subject);
     armedSubjectId = armedSubjectId === id ? null : id;
+    setArmedTemplate(false);
     renderChips();
   });
 
@@ -179,11 +228,26 @@
     e.dataTransfer.effectAllowed = "copy";
   });
 
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && armedSubjectId !== null) {
+  templateChip.addEventListener("click", () => {
+    setArmedTemplate(!armedTemplate);
+    if (armedTemplate && armedSubjectId !== null) {
       armedSubjectId = null;
       renderChips();
     }
+  });
+
+  templateChip.addEventListener("dragstart", e => {
+    e.dataTransfer.setData("text/plain", "template");
+    e.dataTransfer.effectAllowed = "copy";
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    if (armedSubjectId !== null) {
+      armedSubjectId = null;
+      renderChips();
+    }
+    if (armedTemplate) setArmedTemplate(false);
   });
 
   // ---- row interactions ----
@@ -226,13 +290,20 @@
     }
 
     // Armed chip: clicking a planned-day card acts like a drop.
-    if (armedSubjectId !== null && !e.target.closest("button[data-remove], a")) {
+    if ((armedSubjectId !== null || armedTemplate) && !e.target.closest("button[data-remove], a")) {
       const card = e.target.closest(".day-slot.planned");
       if (card) {
-        const subjectId = armedSubjectId;
-        armedSubjectId = null;
-        renderChips();
-        openPicker(Number(card.dataset.student), Number(card.dataset.day), subjectId);
+        const studentId = Number(card.dataset.student);
+        const dayId = Number(card.dataset.day);
+        if (armedTemplate) {
+          setArmedTemplate(false);
+          applyTemplate(studentId, dayId);
+        } else {
+          const subjectId = armedSubjectId;
+          armedSubjectId = null;
+          renderChips();
+          openPicker(studentId, dayId, subjectId);
+        }
       }
     }
   });
@@ -257,9 +328,16 @@
     if (!card) return;
     e.preventDefault();
     card.classList.remove("drop-hot");
-    const subjectId = Number(e.dataTransfer.getData("text/plain"));
+    const data = e.dataTransfer.getData("text/plain");
+    const studentId = Number(card.dataset.student);
+    const dayId = Number(card.dataset.day);
+    if (data === "template") {
+      applyTemplate(studentId, dayId);
+      return;
+    }
+    const subjectId = Number(data);
     if (!subjectId) return;
-    openPicker(Number(card.dataset.student), Number(card.dataset.day), subjectId);
+    openPicker(studentId, dayId, subjectId);
   });
 
   // ---- compact picker (subject known; choose course -> assignment -> effort) ----
@@ -299,7 +377,14 @@
     }).join("");
 
     const firstAvailable = courses.find(c => !takenCourseIds.has(c.id));
-    if (firstAvailable) pickerCourse.value = String(firstAvailable.id);
+
+    // Default to the last pick for this kid + subject when still valid and available.
+    const remembered = (lastPicks[studentId] || {})[subjectId];
+    const rememberedCourse = remembered
+      ? courses.find(c => c.id === remembered.courseId && !takenCourseIds.has(c.id))
+      : null;
+    const initialCourse = rememberedCourse || firstAvailable;
+    if (initialCourse) pickerCourse.value = String(initialCourse.id);
 
     // Single-course subjects skip the course step entirely.
     pickerCourseLabel.hidden = courses.length === 1 && !!firstAvailable;
@@ -311,6 +396,13 @@
     pickerSubmit.disabled = !usable;
     if (usable) {
       syncAssignments();
+      if (rememberedCourse && rememberedCourse.assignments.some(a => a.id === remembered.catalogAssignmentId)) {
+        pickerAssignment.value = String(remembered.catalogAssignmentId);
+        syncEffort();
+        if (remembered.effort === "low" || remembered.effort === "high") {
+          pickerEffort.value = remembered.effort;
+        }
+      }
     } else {
       pickerNote.textContent = "Every course in this subject already has work on this day.";
       pickerAssignment.innerHTML = "";
@@ -347,6 +439,7 @@
         catalogAssignmentId,
         effort: pickerEffort.value
       });
+      rememberPick(picker.studentId, picker.subjectId, Number(pickerCourse.value), catalogAssignmentId, pickerEffort.value);
       dialog.close();
       showFlash(flash, "Assigned");
       await refreshStudent(picker.studentId);
@@ -356,6 +449,194 @@
       pickerSubmit.disabled = false;
     }
   };
+
+  // ---- day-plan template: apply on drop ----
+
+  async function applyTemplate(studentId, dayId) {
+    const items = (templates[studentId] || []).filter(t => catalogById[t.catalogAssignmentId]);
+    if (items.length === 0) {
+      openTemplateEditor(studentId);
+      return;
+    }
+    const day = (daysByStudent[studentId] || []).find(d => d.id === dayId);
+    if (!day || day.status === "completed") return;
+
+    const takenCourseIds = new Set(day.assignments
+      .filter(a => a.kind === "required" && a.status !== "deferred")
+      .map(a => a.courseId));
+
+    let added = 0, skipped = 0, failed = 0;
+    for (const item of items) {
+      const courseId = catalogById[item.catalogAssignmentId].course.id;
+      if (takenCourseIds.has(courseId)) {
+        skipped += 1;
+        continue;
+      }
+      try {
+        await api.post(`/api/planner/${studentId}/days/${dayId}/assignments`, {
+          catalogAssignmentId: item.catalogAssignmentId,
+          effort: item.effort === "high" ? "high" : "low"
+        });
+        takenCourseIds.add(courseId);
+        added += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    await refreshStudent(studentId);
+
+    const parts = [`Added ${added}`];
+    if (skipped) parts.push(`skipped ${skipped} (already planned)`);
+    if (failed) parts.push(`${failed} failed`);
+    showFlash(flash, parts.join(" · "), failed > 0);
+  }
+
+  // ---- day-plan template: builder dialog ----
+
+  const templateDialog = document.getElementById("templateDialog");
+  const templateStudentSel = document.getElementById("templateStudent");
+  const templateItemsEl = document.getElementById("templateItems");
+  const templateNote = document.getElementById("templateNote");
+
+  let editorStudentId = null;
+  let editorItems = []; // working copy: [{ catalogAssignmentId, effort }]
+
+  const plannableSubjects = tree.filter(s => s.courses.some(c => c.assignments.length > 0));
+
+  function courseOptionsHtml(selectedCourseId) {
+    return plannableSubjects.map(s => `
+      <optgroup label="${esc(s.name)}">
+        ${s.courses.filter(c => c.assignments.length > 0).map(c =>
+          `<option value="${c.id}" ${c.id === selectedCourseId ? "selected" : ""}>${esc(c.name)}</option>`
+        ).join("")}
+      </optgroup>`).join("");
+  }
+
+  function templateRowHtml(item, idx) {
+    const { course } = catalogById[item.catalogAssignmentId];
+    return `
+      <div class="template-item" data-idx="${idx}">
+        <select data-role="course" aria-label="Course">${courseOptionsHtml(course.id)}</select>
+        <select data-role="assignment" aria-label="Assignment">
+          ${course.assignments.map(a =>
+            `<option value="${a.id}" ${a.id === item.catalogAssignmentId ? "selected" : ""}>${esc(a.name)}</option>`
+          ).join("")}
+        </select>
+        <select data-role="effort" aria-label="Effort">
+          <option value="low" ${item.effort !== "high" ? "selected" : ""}>Low (30m)</option>
+          <option value="high" ${item.effort === "high" ? "selected" : ""}>High (60m)</option>
+        </select>
+        <button type="button" class="danger slim" data-role="remove" title="Remove item">✕</button>
+      </div>`;
+  }
+
+  function renderTemplateEditor() {
+    templateItemsEl.innerHTML = editorItems.map(templateRowHtml).join("");
+    templateNote.hidden = editorItems.length > 0;
+    templateNote.textContent = "No items yet — add the courses this kid does every day.";
+  }
+
+  function loadEditorStudent(studentId) {
+    editorStudentId = studentId;
+    editorItems = (templates[studentId] || [])
+      .filter(t => catalogById[t.catalogAssignmentId])
+      .map(t => ({ catalogAssignmentId: t.catalogAssignmentId, effort: t.effort }));
+    renderTemplateEditor();
+  }
+
+  function openTemplateEditor(studentId) {
+    if (students.length === 0) return;
+    templateStudentSel.innerHTML = students.map(s =>
+      `<option value="${s.id}">${esc(s.displayName)}</option>`).join("");
+    const target = students.some(s => s.id === studentId) ? studentId : students[0].id;
+    templateStudentSel.value = String(target);
+    loadEditorStudent(target);
+    templateDialog.showModal();
+  }
+
+  templateStudentSel.addEventListener("change", () => {
+    loadEditorStudent(Number(templateStudentSel.value));
+  });
+
+  document.getElementById("templateAddItem").onclick = () => {
+    const usedCourseIds = new Set(editorItems.map(t => catalogById[t.catalogAssignmentId].course.id));
+    const allCourses = plannableSubjects.flatMap(s => s.courses.filter(c => c.assignments.length > 0));
+    const course = allCourses.find(c => !usedCourseIds.has(c.id)) || allCourses[0];
+    if (!course) return;
+    const first = course.assignments[0];
+    editorItems.push({ catalogAssignmentId: first.id, effort: first.defaultEffort });
+    renderTemplateEditor();
+  };
+
+  templateItemsEl.addEventListener("change", e => {
+    const row = e.target.closest(".template-item");
+    if (!row) return;
+    const item = editorItems[Number(row.dataset.idx)];
+    if (!item) return;
+    const role = e.target.dataset.role;
+    if (role === "course") {
+      const course = plannableSubjects
+        .flatMap(s => s.courses).find(c => c.id === Number(e.target.value));
+      if (course && course.assignments.length > 0) {
+        item.catalogAssignmentId = course.assignments[0].id;
+        item.effort = course.assignments[0].defaultEffort;
+      }
+      renderTemplateEditor();
+    } else if (role === "assignment") {
+      const info = catalogById[Number(e.target.value)];
+      if (info) {
+        item.catalogAssignmentId = info.assignment.id;
+        item.effort = info.assignment.defaultEffort;
+      }
+      renderTemplateEditor();
+    } else if (role === "effort") {
+      item.effort = e.target.value;
+    }
+  });
+
+  templateItemsEl.addEventListener("click", e => {
+    const remove = e.target.closest("[data-role='remove']");
+    if (!remove) return;
+    const row = remove.closest(".template-item");
+    editorItems.splice(Number(row.dataset.idx), 1);
+    renderTemplateEditor();
+  });
+
+  document.getElementById("templateForm").onsubmit = e => {
+    e.preventDefault();
+    if (editorStudentId === null) return;
+    templates[editorStudentId] = editorItems.map(t => ({
+      catalogAssignmentId: t.catalogAssignmentId,
+      effort: t.effort
+    }));
+    persistTemplates();
+    templateDialog.close();
+    const student = students.find(s => s.id === editorStudentId);
+    showFlash(flash, `Day plan saved${student ? ` for ${student.displayName}` : ""}`);
+  };
+
+  document.getElementById("templateClear").onclick = () => {
+    if (editorStudentId === null) return;
+    delete templates[editorStudentId];
+    persistTemplates();
+    editorItems = [];
+    renderTemplateEditor();
+  };
+
+  document.getElementById("templateCancel").onclick = () => templateDialog.close();
+
+  document.getElementById("editTemplateBtn").onclick = () => {
+    const firstOpen = students.find(s => openSet.has(s.id));
+    openTemplateEditor(firstOpen ? firstOpen.id : (students[0] && students[0].id));
+  };
+
+  // ---- course rail: collapsed by default, state persisted ----
+
+  const courseRail = document.getElementById("courseRail");
+  if (localStorage.getItem(COURSE_RAIL_KEY) === "open") courseRail.open = true;
+  courseRail.addEventListener("toggle", () => {
+    localStorage.setItem(COURSE_RAIL_KEY, courseRail.open ? "open" : "closed");
+  });
 
   // ---- initial paint ----
 
