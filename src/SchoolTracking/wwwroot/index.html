@@ -11,39 +11,46 @@
   <link rel="icon" type="image/svg+xml" href="/img/schoolnest.svg" />
   <script src="/js/themes.js"></script>
   <script src="/js/theme.js"></script>
+  <script src="/js/layout.js"></script>
 </head>
 <body>
   <div class="shell">
     <div class="topbar" id="topbar"></div>
     <div id="flash" hidden></div>
 
-    <div class="panel panel-today-required">
-      <h1>Today's required work</h1>
-      <p id="dayMeta" class="muted"></p>
-      <ul class="list today-task-list" id="requiredList"></ul>
-    </div>
+    <div class="today-layout" id="todayLayout">
+      <aside class="layout-stage layout-stage-a" aria-hidden="true"></aside>
+      <div class="today-content">
+        <div class="panel panel-today-required">
+          <h1>Today's required work</h1>
+          <p id="dayMeta" class="muted"></p>
+          <ul class="list today-task-list" id="requiredList"></ul>
+        </div>
 
-    <details class="panel panel-optional">
-      <summary class="optional-summary">
-        <span class="optional-summary-title">Optional work</span>
-        <span id="optionalCount" class="optional-summary-count muted"></span>
-      </summary>
-      <ul class="list optional-task-list" id="optionalList"></ul>
-      <form id="optionalForm" class="optional-add-card">
-        <div class="optional-add-fields">
-          <label>From optional list
-            <select id="optActivity"><option value="">— new freeform —</option></select>
-          </label>
-          <label>New name (if freeform)
-            <input id="optName" placeholder="e.g. Free reading" />
-          </label>
-        </div>
-        <div class="optional-add-side">
-          <span id="optEffortWrap"></span>
-          <button type="submit">Add &amp; complete</button>
-        </div>
-      </form>
-    </details>
+        <details class="panel panel-optional">
+          <summary class="optional-summary">
+            <span class="optional-summary-title">Optional work</span>
+            <span id="optionalCount" class="optional-summary-count muted"></span>
+          </summary>
+          <ul class="list optional-task-list" id="optionalList"></ul>
+          <form id="optionalForm" class="optional-add-card">
+            <div class="optional-add-fields">
+              <label>From optional list
+                <select id="optActivity"><option value="">— new freeform —</option></select>
+              </label>
+              <label>New name (if freeform)
+                <input id="optName" placeholder="e.g. Free reading" />
+              </label>
+            </div>
+            <div class="optional-add-side">
+              <span id="optEffortWrap"></span>
+              <button type="submit">Add &amp; complete</button>
+            </div>
+          </form>
+        </details>
+      </div>
+      <aside class="layout-stage layout-stage-b" aria-hidden="true"></aside>
+    </div>
   </div>
   <script src="/js/app.js"></script>
   <script>

@@ -107,6 +107,12 @@ function snLogo(extraClass = "") {
 
 async function renderTopbar(me, active) {
   const themeLink = `<a href="/theme.html" class="${active === "theme" ? "active" : ""}">Theme</a>`;
+  const layoutMenu = active === "today"
+    ? `<details class="layout-menu">
+        <summary>Layout</summary>
+        <div class="layout-switcher" role="group" aria-label="Page layout"></div>
+      </details>`
+    : "";
   const parentLinks = `
     <a href="/planner.html" class="${active === "planner" ? "active" : ""}">Planner</a>
     <a href="/catalog.html" class="${active === "catalog" ? "active" : ""}">Catalog</a>
@@ -120,6 +126,7 @@ async function renderTopbar(me, active) {
   const studentLinks = `
     <a href="/index.html" class="${active === "today" ? "active" : ""}">Today</a>
     ${themeLink}
+    ${layoutMenu}
   `;
   const el = document.getElementById("topbar");
   if (!el) return;
@@ -135,6 +142,10 @@ async function renderTopbar(me, active) {
     await api.post("/api/auth/logout", {});
     location.href = "/login.html";
   };
+
+  if (typeof StLayout !== "undefined" && active === "today") {
+    StLayout.initSwitcher();
+  }
 
   if (me.role === "parent") {
     try {
