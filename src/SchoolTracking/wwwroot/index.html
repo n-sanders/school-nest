@@ -66,6 +66,7 @@
     async function load() {
       const me = await requireAuth("student");
       await renderTopbar(me, "today");
+      applyTodayBackground(me.activeBackgroundId);
       const flash = document.getElementById("flash");
 
       const activities = await api.get("/api/family/optional-activities");

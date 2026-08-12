@@ -121,9 +121,71 @@ public static class FamilyEndpoints
             });
         });
 
+        group.MapGet("/image-settings", async (AuthService auth, HttpContext http, AppDbContext db) =>
+        {
+            var user = await http.RequireParentAsync(auth);
+            if (user is null) return Results.Empty;
+
+            var family = await db.Families.AsNoTracking()
+                .FirstOrDefaultAsync(f => f.Id == user.FamilyId);
+            if (family is null)
+                return Results.NotFound(new { error = "Family not found" });
+
+            return Results.Ok(new
+            {
+                apiKeyMasked = ImageGen.MaskApiKey(family.OpenRouterApiKey),
+                hasApiKey = !string.IsNullOrWhiteSpace(family.OpenRouterApiKey),
+                dailyLimit = family.ImageGenDailyLimit,
+                boilerplate = family.ImageGenBoilerplate,
+                model = family.ImageGenModel
+            });
+        });
+
+        group.MapPut("/image-settings", async (
+            ImageSettingsRequest req, AuthService auth, HttpContext http, AppDbContext db) =>
+        {
+            var user = await http.RequireParentAsync(auth);
+            if (user is null) return Results.Empty;
+
+            var family = await db.Families.FirstOrDefaultAsync(f => f.Id == user.FamilyId);
+            if (family is null)
+                return Results.NotFound(new { error = "Family not found" });
+
+            if (req.DailyLimit is not null)
+            {
+                if (req.DailyLimit < ImageGen.MinDailyLimit || req.DailyLimit > ImageGen.MaxDailyLimit)
+                    return Results.BadRequest(new { error = $"dailyLimit must be {ImageGen.MinDailyLimit}–{ImageGen.MaxDailyLimit}" });
+                family.ImageGenDailyLimit = req.DailyLimit.Value;
+            }
+
+            if (req.Boilerplate is not null)
+                family.ImageGenBoilerplate = req.Boilerplate.Trim();
+
+            if (req.Model is not null)
+            {
+                if (string.IsNullOrWhiteSpace(req.Model))
+                    return Results.BadRequest(new { error = "model required" });
+                family.ImageGenModel = req.Model.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(req.OpenRouterApiKey))
+                family.OpenRouterApiKey = req.OpenRouterApiKey.Trim();
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new
+            {
+                apiKeyMasked = ImageGen.MaskApiKey(family.OpenRouterApiKey),
+                hasApiKey = !string.IsNullOrWhiteSpace(family.OpenRouterApiKey),
+                dailyLimit = family.ImageGenDailyLimit,
+                boilerplate = family.ImageGenBoilerplate,
+                model = family.ImageGenModel
+            });
+        });
+
         return group;
     }
 
     public record MagicWordRequest(string MagicWord);
     public record OptionalActivityRequest(string Name, string? Url, string? Description, string? DefaultEffort);
+    public record ImageSettingsRequest(string? OpenRouterApiKey, int? DailyLimit, string? Boilerplate, string? Model);
 }

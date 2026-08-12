@@ -59,7 +59,8 @@ public static class AuthEndpoints
                 id = user.Id,
                 displayName = user.DisplayName,
                 role = user.Role.ToString().ToLowerInvariant(),
-                familyId = user.FamilyId
+                familyId = user.FamilyId,
+                activeBackgroundId = user.ActiveBackgroundId
             });
         });
 

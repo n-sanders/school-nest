@@ -6,10 +6,16 @@ public class Family
     public string Name { get; set; } = "";
     public int TargetHoursPerYear { get; set; } = 900;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public string? OpenRouterApiKey { get; set; }
+    public int ImageGenDailyLimit { get; set; } = 3;
+    public string ImageGenBoilerplate { get; set; } = "";
+    public string ImageGenModel { get; set; } = "";
 
     public List<User> Users { get; set; } = [];
     public List<Subject> Subjects { get; set; } = [];
     public List<OptionalActivity> OptionalActivities { get; set; } = [];
+    public List<GeneratedBackground> GeneratedBackgrounds { get; set; } = [];
+    public List<RejectedImagePrompt> RejectedImagePrompts { get; set; } = [];
 }
 
 public class User
@@ -20,11 +26,15 @@ public class User
     public UserRole Role { get; set; }
     public string MagicWord { get; set; } = "";
     public bool IsActive { get; set; } = true;
+    public int? ActiveBackgroundId { get; set; }
 
     public Family Family { get; set; } = null!;
+    public GeneratedBackground? ActiveBackground { get; set; }
     public List<Session> Sessions { get; set; } = [];
     public List<PlannedDay> PlannedDays { get; set; } = [];
     public List<Assignment> Assignments { get; set; } = [];
+    public List<GeneratedBackground> GeneratedBackgrounds { get; set; } = [];
+    public List<RejectedImagePrompt> RejectedImagePrompts { get; set; } = [];
 }
 
 public class Session
@@ -124,4 +134,31 @@ public class Assignment
     public CatalogAssignment? CatalogAssignment { get; set; }
     public OptionalActivity? OptionalActivity { get; set; }
     public PlannedDay? PlannedDay { get; set; }
+}
+
+public class GeneratedBackground
+{
+    public int Id { get; set; }
+    public int FamilyId { get; set; }
+    public int StudentUserId { get; set; }
+    public string StudentPrompt { get; set; } = "";
+    public byte[] ImageBytes { get; set; } = [];
+    public string ContentType { get; set; } = "image/png";
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public Family Family { get; set; } = null!;
+    public User Student { get; set; } = null!;
+}
+
+public class RejectedImagePrompt
+{
+    public int Id { get; set; }
+    public int FamilyId { get; set; }
+    public int StudentUserId { get; set; }
+    public string StudentPrompt { get; set; } = "";
+    public string? ProviderMessage { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public Family Family { get; set; } = null!;
+    public User Student { get; set; } = null!;
 }

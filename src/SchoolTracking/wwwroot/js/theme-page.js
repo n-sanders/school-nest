@@ -139,4 +139,145 @@
   renderPresets();
   renderFonts();
   renderColorEditor();
+
+  if (me.role !== "student") return;
+
+  const bgPanel = document.getElementById("bg-panel");
+  const bgQuota = document.getElementById("bg-quota");
+  const bgForm = document.getElementById("bg-form");
+  const bgPrompt = document.getElementById("bg-prompt");
+  const bgGenerate = document.getElementById("bg-generate");
+  const bgStatus = document.getElementById("bg-status");
+  const bgClearWrap = document.getElementById("bg-clear-wrap");
+  const bgClear = document.getElementById("bg-clear");
+  const bgGallery = document.getElementById("bg-gallery");
+  const previewSample = document.getElementById("previewSample");
+  const flash = document.getElementById("flash");
+  let bgState = null;
+
+  function applyPreviewBackground(id) {
+    if (!previewSample) return;
+    if (id) {
+      previewSample.classList.add("has-ai-bg");
+      previewSample.style.setProperty("--page-bg-image", `url("/api/backgrounds/${id}/image")`);
+    } else {
+      previewSample.classList.remove("has-ai-bg");
+      previewSample.style.removeProperty("--page-bg-image");
+    }
+  }
+
+  function setBgStatus(message, show) {
+    bgStatus.hidden = !show;
+    bgStatus.textContent = message || "";
+  }
+
+  function formatCountdown(seconds) {
+    const s = Math.max(0, seconds);
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${String(r).padStart(2, "0")}`;
+  }
+
+  function startGenerateCountdown() {
+    let left = bgState?.generateTimeoutSeconds ?? 120;
+    setBgStatus(`Generating… ${formatCountdown(left)} remaining`, true);
+    return setInterval(() => {
+      left = Math.max(0, left - 1);
+      setBgStatus(`Generating… ${formatCountdown(left)} remaining`, true);
+    }, 1000);
+  }
+
+  function renderBackgrounds() {
+    if (!bgState) return;
+    bgPanel.hidden = false;
+    const remaining = bgState.remainingToday ?? 0;
+    const limit = bgState.dailyLimit ?? 0;
+    if (!bgState.configured) {
+      bgQuota.textContent = "Ask a parent to turn this on.";
+      bgPrompt.disabled = true;
+      bgGenerate.disabled = true;
+    } else {
+      bgQuota.textContent = remaining === 1
+        ? `1 generation left today (${limit} per day).`
+        : `${remaining} generations left today (${limit} per day).`;
+      bgPrompt.disabled = remaining <= 0;
+      bgGenerate.disabled = remaining <= 0;
+    }
+
+    applyPreviewBackground(bgState.activeBackgroundId);
+    bgClearWrap.hidden = !bgState.activeBackgroundId;
+
+    const images = bgState.images || [];
+    if (!images.length) {
+      bgGallery.innerHTML = `<p class="muted">No backgrounds yet.</p>`;
+      return;
+    }
+
+    bgGallery.innerHTML = images.map((img) => {
+      const active = img.id === bgState.activeBackgroundId;
+      return `<button type="button" class="bg-card${active ? " is-active" : ""}" data-id="${img.id}">
+        <img src="${escapeHtml(img.imageUrl)}" alt="" loading="lazy" />
+        <span class="bg-card-prompt">${escapeHtml(img.studentPrompt)}</span>
+        ${active ? `<span class="bg-card-used">On Today</span>` : ""}
+      </button>`;
+    }).join("");
+  }
+
+  async function refreshBackgrounds() {
+    bgState = await api.get("/api/backgrounds");
+    renderBackgrounds();
+  }
+
+  bgForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const prompt = bgPrompt.value.trim();
+    if (!prompt) {
+      showFlash(flash, "Describe the background you want", true);
+      return;
+    }
+    bgGenerate.disabled = true;
+    let tick = null;
+    try {
+      tick = startGenerateCountdown();
+      await api.post("/api/backgrounds", { prompt });
+      bgPrompt.value = "";
+      showFlash(flash, "Background created and applied to Today");
+      await refreshBackgrounds();
+    } catch (err) {
+      showFlash(flash, err.message, true);
+    } finally {
+      if (tick) clearInterval(tick);
+      setBgStatus("", false);
+      renderBackgrounds();
+    }
+  });
+
+  bgGallery.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-id]");
+    if (!btn || !bgGallery.contains(btn)) return;
+    const id = Number(btn.dataset.id);
+    try {
+      await api.put("/api/backgrounds/active", { id });
+      showFlash(flash, "Applied to Today");
+      await refreshBackgrounds();
+    } catch (err) {
+      showFlash(flash, err.message, true);
+    }
+  });
+
+  bgClear.addEventListener("click", async () => {
+    try {
+      await api.put("/api/backgrounds/active", { id: null });
+      showFlash(flash, "Background cleared");
+      await refreshBackgrounds();
+    } catch (err) {
+      showFlash(flash, err.message, true);
+    }
+  });
+
+  try {
+    await refreshBackgrounds();
+  } catch (err) {
+    showFlash(flash, err.message, true);
+  }
 })();

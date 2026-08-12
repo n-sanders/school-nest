@@ -15,6 +15,11 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite($"Data Source={dbPath}"));
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<DeferralService>();
+builder.Services.AddHttpClient<OpenRouterImageService>(client =>
+{
+    client.BaseAddress = new Uri("https://openrouter.ai/");
+    client.Timeout = TimeSpan.FromSeconds(ImageGen.GenerateTimeoutSeconds);
+});
 
 var app = builder.Build();
 
@@ -29,6 +34,7 @@ app.UseStaticFiles();
 
 app.MapAuthEndpoints();
 app.MapFamilyEndpoints();
+app.MapBackgroundEndpoints();
 app.MapCatalogEndpoints();
 app.MapPlannerEndpoints();
 app.MapAssignmentEndpoints();

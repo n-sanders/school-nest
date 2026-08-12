@@ -23,10 +23,22 @@ public static class SeedData
         }
 
         await db.Database.EnsureCreatedAsync();
+        await SchemaPatches.ApplyAsync(db);
 
         // Existing DBs: give empty courses a Next lesson so they become plannable.
         if (await db.Families.AnyAsync())
         {
+            var families = await db.Families.ToListAsync();
+            foreach (var existing in families)
+            {
+                if (string.IsNullOrWhiteSpace(existing.ImageGenBoilerplate))
+                    existing.ImageGenBoilerplate = ImageGen.DefaultBoilerplate;
+                if (string.IsNullOrWhiteSpace(existing.ImageGenModel))
+                    existing.ImageGenModel = ImageGen.DefaultModel;
+                if (existing.ImageGenDailyLimit <= 0)
+                    existing.ImageGenDailyLimit = ImageGen.DefaultDailyLimit;
+            }
+            await db.SaveChangesAsync();
             await CatalogDefaults.EnsureNextLessonForEmptyCoursesAsync(db);
             return;
         }
@@ -35,7 +47,10 @@ public static class SeedData
         {
             Name = "Sanders Family",
             TargetHoursPerYear = 900,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            ImageGenDailyLimit = ImageGen.DefaultDailyLimit,
+            ImageGenBoilerplate = ImageGen.DefaultBoilerplate,
+            ImageGenModel = ImageGen.DefaultModel
         };
         db.Families.Add(family);
         await db.SaveChangesAsync();

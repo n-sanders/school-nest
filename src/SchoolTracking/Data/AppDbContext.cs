@@ -14,18 +14,25 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<OptionalActivity> OptionalActivities => Set<OptionalActivity>();
     public DbSet<PlannedDay> PlannedDays => Set<PlannedDay>();
     public DbSet<Assignment> Assignments => Set<Assignment>();
+    public DbSet<GeneratedBackground> GeneratedBackgrounds => Set<GeneratedBackground>();
+    public DbSet<RejectedImagePrompt> RejectedImagePrompts => Set<RejectedImagePrompt>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Family>(e =>
         {
             e.HasIndex(x => x.Name);
+            e.Property(x => x.ImageGenDailyLimit).HasDefaultValue(3);
         });
 
         modelBuilder.Entity<User>(e =>
         {
             e.HasIndex(x => new { x.FamilyId, x.DisplayName });
             e.HasOne(x => x.Family).WithMany(x => x.Users).HasForeignKey(x => x.FamilyId);
+            e.HasOne(x => x.ActiveBackground)
+                .WithMany()
+                .HasForeignKey(x => x.ActiveBackgroundId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Session>(e =>
@@ -75,6 +82,27 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(x => x.CatalogAssignment).WithMany().HasForeignKey(x => x.CatalogAssignmentId);
             e.HasOne(x => x.OptionalActivity).WithMany().HasForeignKey(x => x.OptionalActivityId);
             e.HasOne(x => x.PlannedDay).WithMany(x => x.Assignments).HasForeignKey(x => x.PlannedDayId);
+        });
+
+        modelBuilder.Entity<GeneratedBackground>(e =>
+        {
+            e.HasIndex(x => x.StudentUserId);
+            e.HasIndex(x => x.FamilyId);
+            e.HasIndex(x => x.CreatedAt);
+            e.Property(x => x.StudentPrompt).HasMaxLength(200);
+            e.Property(x => x.ImageBytes).IsRequired();
+            e.HasOne(x => x.Family).WithMany(x => x.GeneratedBackgrounds).HasForeignKey(x => x.FamilyId);
+            e.HasOne(x => x.Student).WithMany(x => x.GeneratedBackgrounds).HasForeignKey(x => x.StudentUserId);
+        });
+
+        modelBuilder.Entity<RejectedImagePrompt>(e =>
+        {
+            e.HasIndex(x => x.FamilyId);
+            e.HasIndex(x => x.StudentUserId);
+            e.HasIndex(x => x.CreatedAt);
+            e.Property(x => x.StudentPrompt).HasMaxLength(200);
+            e.HasOne(x => x.Family).WithMany(x => x.RejectedImagePrompts).HasForeignKey(x => x.FamilyId);
+            e.HasOne(x => x.Student).WithMany(x => x.RejectedImagePrompts).HasForeignKey(x => x.StudentUserId);
         });
     }
 }

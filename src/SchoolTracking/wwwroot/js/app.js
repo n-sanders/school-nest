@@ -121,6 +121,7 @@ async function renderTopbar(me, active) {
     <a href="/reports.html" class="${active === "reports" ? "active" : ""}">Reports</a>
     <a href="/adjustments.html" class="${active === "adjustments" ? "active" : ""}">Adjustments</a>
     <a href="/magic-words.html" class="${active === "magic" ? "active" : ""}">Magic words</a>
+    <a href="/backgrounds.html" class="${active === "backgrounds" ? "active" : ""}">Backgrounds</a>
     ${themeLink}
   `;
   const studentLinks = `
@@ -155,6 +156,26 @@ async function renderTopbar(me, active) {
         link.innerHTML = `Requests <span class="nav-count">${count}</span>`;
       }
     } catch { /* leave nav without badge */ }
+  }
+}
+
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function applyTodayBackground(id) {
+  const root = document.documentElement;
+  if (id) {
+    root.classList.add("has-ai-bg");
+    root.style.setProperty("--page-bg-image", `url("/api/backgrounds/${id}/image")`);
+  } else {
+    root.classList.remove("has-ai-bg");
+    root.style.removeProperty("--page-bg-image");
   }
 }
 

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Backgrounds — School Nest</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Caveat:wght@600;700&family=Chewy&family=Comic+Neue:wght@400;700&family=Courier+Prime:wght@400;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Fredoka:wght@500;600;700&family=Lora:wght@400;600;700&family=Nunito:wght@400;600;700&family=Patrick+Hand&family=Quicksand:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/site.css" />
+  <link rel="icon" type="image/svg+xml" href="/img/schoolnest.svg" />
+  <script src="/js/themes.js"></script>
+  <script src="/js/theme.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar" id="topbar"></div>
+    <div id="flash" hidden></div>
+
+    <div class="panel">
+      <h1>Backgrounds</h1>
+      <p class="muted">OpenRouter key and prompt rules for student wallpapers. Leave the key blank to keep the current one.</p>
+      <form id="settingsForm" class="image-settings-form">
+        <label>OpenRouter API key
+          <input id="apiKey" type="password" autocomplete="off" />
+        </label>
+        <p class="muted" id="keyHint"></p>
+        <label>Daily limit per student
+          <input id="dailyLimit" type="number" min="1" max="50" />
+        </label>
+        <label>Model
+          <input id="model" spellcheck="false" />
+        </label>
+        <label>Boilerplate prompt
+          <textarea id="boilerplate" rows="6"></textarea>
+        </label>
+        <div class="actions">
+          <button type="submit">Save settings</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Blocked prompts</h2>
+      <p class="muted">Descriptions the image service refused. Dismiss after you have reviewed them.</p>
+      <div id="rejections"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Generated images</h2>
+      <p class="muted">Every child's images, for moderating. Students cannot see each other's pictures.</p>
+      <div id="gallery"></div>
+    </div>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    function formatWhen(iso) {
+      try {
+        return new Date(iso).toLocaleString(undefined, {
+          dateStyle: "medium",
+          timeStyle: "short"
+        });
+      } catch {
+        return iso;
+      }
+    }
+
+    function groupByStudent(items, listKey) {
+      const groups = [];
+      const map = new Map();
+      for (const item of items) {
+        if (!map.has(item.studentUserId)) {
+          const g = { id: item.studentUserId, name: item.studentName, [listKey]: [] };
+          map.set(item.studentUserId, g);
+          groups.push(g);
+        }
+        map.get(item.studentUserId)[listKey].push(item);
+      }
+      return groups;
+    }
+
+    async function refresh() {
+      const me = await requireAuth("parent");
+      await renderTopbar(me, "backgrounds");
+      const flash = document.getElementById("flash");
+
+      const settings = await api.get("/api/family/image-settings");
+      document.getElementById("dailyLimit").value = settings.dailyLimit;
+      document.getElementById("model").value = settings.model || "";
+      document.getElementById("boilerplate").value = settings.boilerplate || "";
+      const keyInput = document.getElementById("apiKey");
+      keyInput.value = "";
+      keyInput.placeholder = settings.hasApiKey
+        ? settings.apiKeyMasked || "Key saved"
+        : "sk-or-…";
+      document.getElementById("keyHint").textContent = settings.hasApiKey
+        ? `Current key: ${settings.apiKeyMasked}. Paste a new key only if you want to replace it.`
+        : "No key saved yet — students cannot generate until you add one.";
+
+      const { images, rejections } = await api.get("/api/backgrounds");
+      const gallery = document.getElementById("gallery");
+      const groups = groupByStudent(images || [], "images");
+      if (!groups.length) {
+        gallery.innerHTML = `<p class="muted">No images yet.</p>`;
+      } else {
+        gallery.innerHTML = groups.map((g) => `
+          <section class="bg-moderation-group">
+            <h3>${escapeHtml(g.name)}</h3>
+            <div class="bg-gallery">
+              ${g.images.map((img) => `
+                <div class="bg-mod-card">
+                  <img src="${escapeHtml(img.imageUrl)}" alt="" loading="lazy" />
+                  <div class="bg-card-prompt">${escapeHtml(img.studentPrompt)}</div>
+                  <div class="bg-card-meta">${escapeHtml(formatWhen(img.createdAt))}</div>
+                  <button type="button" class="danger" data-delete="${img.id}">Delete</button>
+                </div>
+              `).join("")}
+            </div>
+          </section>
+        `).join("");
+      }
+
+      const rejectionEl = document.getElementById("rejections");
+      const rejectionGroups = groupByStudent(rejections || [], "items");
+      if (!rejectionGroups.length) {
+        rejectionEl.innerHTML = `<p class="muted">No blocked prompts.</p>`;
+      } else {
+        rejectionEl.innerHTML = rejectionGroups.map((g) => `
+          <section class="bg-moderation-group">
+            <h3>${escapeHtml(g.name)}</h3>
+            <ul class="list bg-rejection-list">
+              ${g.items.map((item) => `
+                <li>
+                  <div><strong>${escapeHtml(item.studentPrompt)}</strong></div>
+                  <div class="bg-card-meta">${escapeHtml(formatWhen(item.createdAt))}</div>
+                  ${item.providerMessage ? `<div class="muted">${escapeHtml(item.providerMessage)}</div>` : ""}
+                  <div class="actions">
+                    <button type="button" class="secondary" data-dismiss="${item.id}">Dismiss</button>
+                  </div>
+                </li>
+              `).join("")}
+            </ul>
+          </section>
+        `).join("");
+      }
+    }
+
+    document.getElementById("settingsForm").onsubmit = async (e) => {
+      e.preventDefault();
+      const flash = document.getElementById("flash");
+      const body = {
+        dailyLimit: Number(document.getElementById("dailyLimit").value),
+        model: document.getElementById("model").value,
+        boilerplate: document.getElementById("boilerplate").value
+      };
+      const key = document.getElementById("apiKey").value.trim();
+      if (key) body.openRouterApiKey = key;
+      try {
+        await api.put("/api/family/image-settings", body);
+        showFlash(flash, "Settings saved");
+        await refresh();
+      } catch (err) {
+        showFlash(flash, err.message, true);
+      }
+    };
+
+    document.getElementById("gallery").onclick = async (e) => {
+      const btn = e.target.closest("[data-delete]");
+      if (!btn) return;
+      const flash = document.getElementById("flash");
+      try {
+        await api.del(`/api/backgrounds/${btn.dataset.delete}`);
+        showFlash(flash, "Image deleted");
+        await refresh();
+      } catch (err) {
+        showFlash(flash, err.message, true);
+      }
+    };
+
+    document.getElementById("rejections").onclick = async (e) => {
+      const btn = e.target.closest("[data-dismiss]");
+      if (!btn) return;
+      const flash = document.getElementById("flash");
+      try {
+        await api.del(`/api/backgrounds/rejections/${btn.dataset.dismiss}`);
+        showFlash(flash, "Blocked prompt dismissed");
+        await refresh();
+      } catch (err) {
+        showFlash(flash, err.message, true);
+      }
+    };
+
+    refresh().catch(() => {});
+  </script>
+</body>
+</html>

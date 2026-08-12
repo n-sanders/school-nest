@@ -21,6 +21,22 @@
 
     <div class="theme-layout">
       <div>
+        <section class="panel" id="bg-panel" hidden>
+          <h2>Today background</h2>
+          <p class="muted" id="bg-quota">Generate a wallpaper for your Today page.</p>
+          <form id="bg-form" class="bg-generate">
+            <label>Describe a background
+              <textarea id="bg-prompt" maxlength="200" rows="4" placeholder="e.g. a cozy forest with fireflies"></textarea>
+            </label>
+            <button type="submit" id="bg-generate">Generate</button>
+          </form>
+          <p class="muted" id="bg-status" hidden></p>
+          <div class="actions" id="bg-clear-wrap" hidden>
+            <button type="button" class="secondary" id="bg-clear">Clear background</button>
+          </div>
+          <div class="bg-gallery" id="bg-gallery"></div>
+        </section>
+
         <section class="panel">
           <h2>Fonts</h2>
           <p class="muted">Fun type for kids — applies right away.</p>
@@ -43,7 +59,7 @@
       <aside class="theme-preview-panel">
         <section class="panel">
           <h2>Preview</h2>
-          <div class="theme-preview-sample">
+          <div class="theme-preview-sample" id="previewSample">
             <div class="brand" style="font-size:1.4rem" id="previewBrand"></div>
             <p class="brand-sub">Sample greeting for the preview</p>
 

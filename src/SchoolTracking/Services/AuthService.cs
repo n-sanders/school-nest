@@ -10,6 +10,7 @@ public class CurrentUser
     public int FamilyId { get; init; }
     public string DisplayName { get; init; } = "";
     public UserRole Role { get; init; }
+    public int? ActiveBackgroundId { get; init; }
 
     public bool IsParent => Role == UserRole.Parent;
     public bool IsStudent => Role == UserRole.Student;
@@ -67,7 +68,8 @@ public class AuthService(AppDbContext db)
             Id = session.User.Id,
             FamilyId = session.User.FamilyId,
             DisplayName = session.User.DisplayName,
-            Role = session.User.Role
+            Role = session.User.Role,
+            ActiveBackgroundId = session.User.ActiveBackgroundId
         };
     }
 }
@@ -113,6 +115,20 @@ public static class HttpAuthExtensions
         {
             http.Response.StatusCode = StatusCodes.Status403Forbidden;
             await http.Response.WriteAsJsonAsync(new { error = "Parents only" });
+            return null;
+        }
+        return user;
+    }
+
+    public static async Task<CurrentUser?> RequireStudentAsync(this HttpContext http, AuthService auth)
+    {
+        var user = await http.RequireUserAsync(auth);
+        if (user is null)
+            return null;
+        if (!user.IsStudent)
+        {
+            http.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await http.Response.WriteAsJsonAsync(new { error = "Students only" });
             return null;
         }
         return user;
