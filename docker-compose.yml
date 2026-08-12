@@ -8,6 +8,7 @@ services:
     environment:
       Database__Path: /data/school.db
       ASPNETCORE_URLS: http://+:8080
+      TZ: America/Chicago
     networks:
       - default
       - web-core_default

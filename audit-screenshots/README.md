@@ -12,6 +12,7 @@ Screenshots in this folder were captured from a live local run (1920×1080) agai
 | `04-requests.png` | Requests (parent) |
 | `05-optional.png` | Optional (parent) |
 | `06-reports.png` | Reports (parent) |
+| — | Adjustments (parent) — no screenshot yet |
 | `07-magic-words.png` | Magic words (parent) |
 | `08-theme.png` | Theme (parent nav) |
 | `09-today-student.png` | Today (student) |
@@ -23,8 +24,8 @@ Screenshots in this folder were captured from a live local run (1920×1080) agai
 
 | Role | Landing | Nav |
 |------|---------|-----|
-| Parent | `/planner.html` | Planner, Catalog, Requests, Optional, Reports, Magic words, Theme |
-| Student | `/index.html` | Today, Theme |
+| Parent | `/planner.html` | Planner, Catalog, Requests, Optional, Reports, Adjustments, Magic words, Theme |
+| Student | `/index.html` | Today, Theme (Layout switcher on Today) |
 
 Auth is profile pick + magic word. `/deferrals.html` redirects to `/requests.html`.
 
@@ -32,8 +33,9 @@ Auth is profile pick + magic word. `/deferrals.html` redirects to `/requests.htm
 
 ## Cross-cutting concepts
 
-- **Effort:** Low = 30m, High = 60m. Set on assign; students can change on complete; parents can override anytime.
+- **Effort:** Low = 30m, High = 60m. Set on assign. Students can change it on Today (on complete, and after). Parents can change it on Requests for pending optional hours. There is no general parent UI for past required-work effort.
 - **Planned days:** Ordered slots (not calendar-first). A day completes when all required work is done.
+- **Day-plan templates:** Per-kid shortcuts in the planner, stored in that browser’s localStorage (not shared across parents or devices).
 - **Optional work:** Separate from subjects/courses. Hours count only after parent acknowledgment on Requests.
 - **Deferral:** Student requests → parent approves (slides course forward) or rejects.
 
@@ -42,13 +44,14 @@ Auth is profile pick + magic word. `/deferrals.html` redirects to `/requests.htm
 ## End-to-end workflows
 
 1. **Curriculum setup (parent):** Catalog → add Subject → Course → catalog assignment (name, URL, default effort, description).
-2. **Schedule required work (parent):** Planner → expand a student → Add day → drag/click a subject (or course) onto a day card → pick assignment + effort in the dialog (MVP: one required assignment per course per day).
+2. **Schedule required work (parent):** Planner → expand a student → Add day → drag/click a subject (or course) onto a day card → pick assignment + effort in the dialog (MVP: one required assignment per course per day). Optional: **edit plans** to save a per-kid day-plan template, then drop **Day plan** onto a day to fill it.
 3. **Do school (student):** Today → Complete (with effort) or Request deferral; optionally expand Optional work → list or freeform + effort → Add & complete.
 4. **Parent inbox:** Requests → approve/reject deferrals; acknowledge optional hours (optionally adjust effort first).
 5. **Parent logs optional for a kid:** Optional → student + activity + effort + date → Add completed optional → still needs Requests ack for hours.
 6. **Compliance:** Reports → date range + student → hours vs family yearly target; day calendar of full/active days.
-7. **Access:** Magic words — parent can change own + all students; cannot change other parents’ words.
-8. **Look & feel:** Theme — fonts, presets, custom colors + live preview; device-local.
+7. **Fix dates / completion (parent):** Adjustments → pick student + around date → toggle day or assignment complete, or change calendar/activity date. Day and assignment toggles are independent.
+8. **Access:** Magic words — parent can change own + all students; cannot change other parents’ words.
+9. **Look & feel:** Theme — fonts, presets, custom colors + live preview; device-local.
 
 ---
 
@@ -69,6 +72,8 @@ Auth is profile pick + magic word. `/deferrals.html` redirects to `/requests.htm
 **Purpose:** Build each student’s ordered day slots and attach required catalog work.
 
 **Workflow:** Subject/course rails on the left; per-student day rows on the right. Add a day card, then drag a subject onto it (or click subject, then day) and choose course, assignment, and effort. Empty days say “Drop a subject here.”
+
+**Day-plan templates:** Edit plans (per kid) in this browser, then drag or click **Day plan** onto a day to apply that kid’s usual courses. Templates are localStorage only.
 
 ![Planner](02-planner.png)
 
@@ -117,7 +122,17 @@ Auth is profile pick + magic word. `/deferrals.html` redirects to `/requests.htm
 
 ---
 
-### 7. Magic words (parent) — `/magic-words.html`
+### 7. Adjustments (parent) — `/adjustments.html`
+
+**Purpose:** Fix completion and calendar dates when something was marked on the wrong day.
+
+**Workflow:** Student + around date → Refresh → pick a planned-day slot. Toggle **Full-day done** and/or assignment done independently; save a calendar date on a completed day. Un-completing a day unlocks planner edits. Student Today prefers an in-progress day or a day completed on today’s calendar date.
+
+No screenshot in this folder yet.
+
+---
+
+### 8. Magic words (parent) — `/magic-words.html`
 
 **Purpose:** Manage login passwords for self and students.
 
@@ -127,7 +142,7 @@ Auth is profile pick + magic word. `/deferrals.html` redirects to `/requests.htm
 
 ---
 
-### 8. Theme (both) — `/theme.html`
+### 9. Theme (both) — `/theme.html`
 
 **Purpose:** Device-local appearance (fonts, color presets, custom colors + live preview).
 
@@ -139,7 +154,7 @@ Auth is profile pick + magic word. `/deferrals.html` redirects to `/requests.htm
 
 ---
 
-### 9. Today (student) — `/index.html`
+### 10. Today (student) — `/index.html`
 
 **Purpose:** Student home for the current planned day slot.
 
@@ -163,3 +178,4 @@ Empty state when no planned days: *“Ask a parent to plan work.”*
 - Optional list is seeded (Free reading, Nature walk, Extra practice) plus “— new freeform —”.
 - Parent Optional and student Today both create optional work that still needs Requests acknowledgment for hour credit.
 - Theme offers kid fonts (Classic, Roundabout, Comic Book, Bubble Gum, Scribbles), color presets, custom colors, and a live preview panel.
+- Adjustments and day-plan templates exist in the app; they were not part of this screenshot capture.
