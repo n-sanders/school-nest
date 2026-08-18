@@ -21,8 +21,9 @@
       <h1>Adjustments</h1>
       <p class="muted">
         Fix completion and calendar dates when something was marked on the wrong day.
-        Day and assignment toggles are independent. Un-completing a day unlocks planner edits;
-        student Today prefers an in-progress day or a day completed on today’s calendar date.
+        Day and assignment toggles are independent. Reopen a partial day (or uncheck Full-day done)
+        to unlock planner edits. Partial days count as closed for reports but are not full days;
+        checking Full-day done promotes them.
       </p>
       <form id="filters" class="row">
         <label>Student <select id="studentId" required></select></label>
@@ -50,6 +51,7 @@
           <span>Full-day done</span>
           <input id="dayDone" type="checkbox" />
         </label>
+        <button type="button" class="secondary" id="reopenDay" hidden>Reopen day</button>
         <label>Calendar date
           <input id="dayCalendarDate" type="date" />
         </label>

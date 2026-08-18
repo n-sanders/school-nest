@@ -6,7 +6,8 @@
     const map = {
       planned: ["Planned", ""],
       inprogress: ["In progress", "pending"],
-      completed: ["Completed", "done"]
+      completed: ["Completed", "done"],
+      partiallycompleted: ["Partial", "pending"]
     };
     const key = String(status || "").replace(/_/g, "").toLowerCase();
     const [label, cls] = map[key] || [status, ""];
@@ -94,19 +95,22 @@
     const statusMap = {
       planned: ["Planned", ""],
       inprogress: ["In progress", "pending"],
-      completed: ["Completed", "done"]
+      completed: ["Completed", "done"],
+      partiallycompleted: ["Partial", "pending"]
     };
     const [statusLabel, statusCls] = statusMap[statusKey] || [day.status, ""];
     statusEl.textContent = statusLabel;
     statusEl.className = `badge ${statusCls}`.trim();
 
-    const done = normalizeDayStatus(day.status) === "completed";
+    const closed = statusKey === "completed" || statusKey === "partiallycompleted";
+    const done = statusKey === "completed";
     const dayDone = document.getElementById("dayDone");
     const dateInput = document.getElementById("dayCalendarDate");
     dayDone.checked = done;
     dateInput.value = day.calendarDate || "";
-    dateInput.disabled = !done;
-    document.getElementById("saveDayDate").disabled = !done;
+    dateInput.disabled = !closed;
+    document.getElementById("saveDayDate").disabled = !closed;
+    document.getElementById("reopenDay").hidden = statusKey !== "partiallycompleted";
 
     const list = document.getElementById("assignmentList");
     const items = day.assignments || [];
@@ -188,6 +192,10 @@
     } else {
       await patchDay({ completed: false });
     }
+  };
+
+  document.getElementById("reopenDay").onclick = async () => {
+    await patchDay({ completed: false });
   };
 
   document.getElementById("saveDayDate").onclick = async () => {

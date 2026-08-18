@@ -16,7 +16,14 @@ public enum PlannedDayStatus
 {
     Planned,
     InProgress,
-    Completed
+    Completed,
+    PartiallyCompleted
+}
+
+public static class PlannedDayStatuses
+{
+    public static bool IsClosed(PlannedDayStatus status) =>
+        status is PlannedDayStatus.Completed or PlannedDayStatus.PartiallyCompleted;
 }
 
 public enum AssignmentKind

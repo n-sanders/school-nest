@@ -11,7 +11,7 @@ public static class PlannerEndpoints
     {
         var group = app.MapGroup("/api/planner");
 
-        group.MapGet("/{studentId:int}/days", async (int studentId, AuthService auth, HttpContext http, AppDbContext db) =>
+        group.MapGet("/{studentId:int}/days", async (int studentId, AuthService auth, HttpContext http, AppDbContext db, DeferralService deferrals) =>
         {
             var user = await http.RequireParentAsync(auth);
             if (user is null) return Results.Empty;
@@ -20,6 +20,8 @@ public static class PlannerEndpoints
                 u.Id == studentId && u.FamilyId == user.FamilyId && u.Role == UserRole.Student);
             if (student is null)
                 return Results.NotFound(new { error = "Student not found" });
+
+            await deferrals.MaybeRolloverStaleInProgressAsync(studentId);
 
             var days = await db.PlannedDays
                 .Where(d => d.StudentUserId == studentId)
@@ -82,8 +84,8 @@ public static class PlannerEndpoints
                 d.Id == dayId && d.StudentUserId == studentId);
             if (day is null)
                 return Results.NotFound(new { error = "Planned day not found" });
-            if (day.Status == PlannedDayStatus.Completed)
-                return Results.BadRequest(new { error = "Cannot edit a completed day" });
+            if (PlannedDayStatuses.IsClosed(day.Status))
+                return Results.BadRequest(new { error = "Cannot edit a closed day" });
 
             var catalog = await db.CatalogAssignments
                 .Include(a => a.Course).ThenInclude(c => c.Subject)
@@ -136,8 +138,8 @@ public static class PlannerEndpoints
                 .FirstOrDefaultAsync(a => a.Id == assignmentId && a.Student.FamilyId == user.FamilyId);
             if (assignment is null)
                 return Results.NotFound();
-            if (assignment.PlannedDay?.Status == PlannedDayStatus.Completed)
-                return Results.BadRequest(new { error = "Cannot remove from a completed day" });
+            if (assignment.PlannedDay is not null && PlannedDayStatuses.IsClosed(assignment.PlannedDay.Status))
+                return Results.BadRequest(new { error = "Cannot remove from a closed day" });
 
             db.Assignments.Remove(assignment);
             await db.SaveChangesAsync();

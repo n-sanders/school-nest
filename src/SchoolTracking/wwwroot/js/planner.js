@@ -91,8 +91,12 @@
 
   // ---- rendering ----
 
+  function isClosedDay(day) {
+    return day.status === "completed" || day.status === "partiallycompleted";
+  }
+
   function queueDays(studentId) {
-    return (daysByStudent[studentId] || []).filter(d => d.status !== "completed");
+    return (daysByStudent[studentId] || []).filter(d => !isClosedDay(d));
   }
 
   function summaryText(studentId) {
@@ -105,7 +109,7 @@
   }
 
   function assignmentItem(a, day) {
-    const removable = day.status !== "completed";
+    const removable = !isClosedDay(day);
     return `
       <li class="day-assignment">
         <div>
@@ -360,7 +364,7 @@
     const subject = subjectById[subjectId];
     const student = students.find(s => s.id === studentId);
     const day = (daysByStudent[studentId] || []).find(d => d.id === dayId);
-    if (!subject || !student || !day) return;
+    if (!subject || !student || !day || isClosedDay(day)) return;
 
     picker = { studentId, dayId, subjectId };
     pickerTitle.textContent = `Add ${subject.name} — ${student.displayName}, Day #${day.sequenceIndex}`;
@@ -459,7 +463,7 @@
       return;
     }
     const day = (daysByStudent[studentId] || []).find(d => d.id === dayId);
-    if (!day || day.status === "completed") return;
+    if (!day || isClosedDay(day)) return;
 
     const takenCourseIds = new Set(day.assignments
       .filter(a => a.kind === "required" && a.status !== "deferred")

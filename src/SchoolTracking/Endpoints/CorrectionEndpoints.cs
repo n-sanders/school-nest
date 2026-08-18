@@ -16,6 +16,7 @@ public static class CorrectionEndpoints
             AuthService auth,
             HttpContext http,
             AppDbContext db,
+            DeferralService deferrals,
             string? around,
             int? dayId) =>
         {
@@ -26,6 +27,8 @@ public static class CorrectionEndpoints
                 u.Id == studentId && u.FamilyId == user.FamilyId && u.Role == UserRole.Student);
             if (student is null)
                 return Results.NotFound(new { error = "Student not found" });
+
+            await deferrals.MaybeRolloverStaleInProgressAsync(studentId);
 
             var aroundDate = DateOnly.FromDateTime(DateTime.Today);
             if (!string.IsNullOrWhiteSpace(around) && DateOnly.TryParse(around, out var parsedAround))
@@ -49,7 +52,7 @@ public static class CorrectionEndpoints
             if (selected is null)
             {
                 selected = allDays.FirstOrDefault(d =>
-                    d.Status == PlannedDayStatus.Completed && d.CalendarDate == aroundDate);
+                    PlannedDayStatuses.IsClosed(d.Status) && d.CalendarDate == aroundDate);
             }
 
             if (selected is null)
@@ -58,7 +61,7 @@ public static class CorrectionEndpoints
             if (selected is null)
             {
                 selected = allDays
-                    .Where(d => d.Status == PlannedDayStatus.Completed && d.CalendarDate is not null)
+                    .Where(d => PlannedDayStatuses.IsClosed(d.Status) && d.CalendarDate is not null)
                     .OrderBy(d => Math.Abs(d.CalendarDate!.Value.DayNumber - aroundDate.DayNumber))
                     .ThenByDescending(d => d.SequenceIndex)
                     .FirstOrDefault();
@@ -71,7 +74,7 @@ public static class CorrectionEndpoints
                 .Where(d =>
                     d.Id == selected?.Id
                     || d.Status == PlannedDayStatus.InProgress
-                    || (d.Status == PlannedDayStatus.Completed
+                    || (PlannedDayStatuses.IsClosed(d.Status)
                         && d.CalendarDate is not null
                         && d.CalendarDate >= windowStart
                         && d.CalendarDate <= windowEnd)
@@ -103,7 +106,8 @@ public static class CorrectionEndpoints
             DayCorrectionRequest req,
             AuthService auth,
             HttpContext http,
-            AppDbContext db) =>
+            AppDbContext db,
+            DeferralService deferrals) =>
         {
             var user = await http.RequireParentAsync(auth);
             if (user is null) return Results.Empty;
@@ -141,13 +145,11 @@ public static class CorrectionEndpoints
                 if (calendarDate is null)
                     return Results.BadRequest(new { error = "calendarDate is required when marking a day complete" });
 
-                var duplicate = await db.PlannedDays.AnyAsync(d =>
-                    d.StudentUserId == day.StudentUserId
-                    && d.Id != day.Id
-                    && d.Status == PlannedDayStatus.Completed
-                    && d.CalendarDate == calendarDate);
+                var duplicate = await ClosedDayOnDateAsync(db, day.StudentUserId, day.Id, calendarDate.Value);
                 if (duplicate)
-                    return Results.BadRequest(new { error = $"Another completed day already uses {calendarDate:yyyy-MM-dd}" });
+                    return Results.BadRequest(new { error = $"Another closed day already uses {calendarDate.Value:yyyy-MM-dd}" });
+
+                await deferrals.SlideUnfinishedRequiredOffDayAsync(day);
 
                 day.Status = PlannedDayStatus.Completed;
                 day.CalendarDate = calendarDate;
@@ -155,8 +157,8 @@ public static class CorrectionEndpoints
             }
             else if (req.Completed == false)
             {
-                if (day.Status != PlannedDayStatus.Completed)
-                    return Results.BadRequest(new { error = "Day is not completed" });
+                if (!PlannedDayStatuses.IsClosed(day.Status))
+                    return Results.BadRequest(new { error = "Day is not closed" });
 
                 var otherInProgress = await db.PlannedDays.AnyAsync(d =>
                     d.StudentUserId == day.StudentUserId
@@ -176,18 +178,14 @@ public static class CorrectionEndpoints
             }
             else if (hasDateField)
             {
-                if (day.Status != PlannedDayStatus.Completed)
-                    return Results.BadRequest(new { error = "Only completed days have a calendar date" });
+                if (!PlannedDayStatuses.IsClosed(day.Status))
+                    return Results.BadRequest(new { error = "Only closed days have a calendar date" });
                 if (requestedDate is null)
-                    return Results.BadRequest(new { error = "calendarDate cannot be cleared while the day is completed" });
+                    return Results.BadRequest(new { error = "calendarDate cannot be cleared while the day is closed" });
 
-                var duplicate = await db.PlannedDays.AnyAsync(d =>
-                    d.StudentUserId == day.StudentUserId
-                    && d.Id != day.Id
-                    && d.Status == PlannedDayStatus.Completed
-                    && d.CalendarDate == requestedDate);
+                var duplicate = await ClosedDayOnDateAsync(db, day.StudentUserId, day.Id, requestedDate.Value);
                 if (duplicate)
-                    return Results.BadRequest(new { error = $"Another completed day already uses {requestedDate:yyyy-MM-dd}" });
+                    return Results.BadRequest(new { error = $"Another closed day already uses {requestedDate:yyyy-MM-dd}" });
 
                 day.CalendarDate = requestedDate;
             }
@@ -197,7 +195,13 @@ public static class CorrectionEndpoints
             }
 
             await db.SaveChangesAsync();
-            return Results.Ok(ToDayDetail(day));
+
+            var fresh = await db.PlannedDays
+                .Include(d => d.Assignments)
+                    .ThenInclude(a => a.Course)
+                        .ThenInclude(c => c!.Subject)
+                .FirstAsync(d => d.Id == day.Id);
+            return Results.Ok(ToDayDetail(fresh));
         });
 
         group.MapPatch("/assignments/{id:int}", async (
@@ -276,6 +280,13 @@ public static class CorrectionEndpoints
 
         return group;
     }
+
+    private static Task<bool> ClosedDayOnDateAsync(AppDbContext db, int studentUserId, int exceptDayId, DateOnly calendarDate) =>
+        db.PlannedDays.AnyAsync(d =>
+            d.StudentUserId == studentUserId
+            && d.Id != exceptDayId
+            && (d.Status == PlannedDayStatus.Completed || d.Status == PlannedDayStatus.PartiallyCompleted)
+            && d.CalendarDate == calendarDate);
 
     private static object ToDaySummary(PlannedDay d)
     {

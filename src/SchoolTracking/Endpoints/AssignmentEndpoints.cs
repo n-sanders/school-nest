@@ -18,7 +18,7 @@ public static class AssignmentEndpoints
             if (!user.IsStudent)
                 return Results.BadRequest(new { error = "Students only" });
 
-            var day = await GetOrActivateCurrentDayAsync(db, user.Id);
+            var day = await deferrals.EnsureRolloverAndActivateAsync(user.Id);
             if (day is null)
                 return Results.Ok(new { day = (object?)null, assignments = Array.Empty<object>(), message = "No planned days yet. Ask a parent to plan work." });
 
@@ -66,6 +66,13 @@ public static class AssignmentEndpoints
             if (user.IsStudent && assignment.StudentUserId != user.Id)
                 return Results.Forbid();
 
+            if (assignment.Kind == AssignmentKind.Required)
+            {
+                await deferrals.MaybeRolloverStaleInProgressAsync(assignment.StudentUserId);
+                await db.Entry(assignment).ReloadAsync();
+                await db.Entry(assignment).Reference(a => a.PlannedDay).LoadAsync();
+            }
+
             if (assignment.Status is AssignmentStatus.Completed or AssignmentStatus.Deferred)
                 return Results.BadRequest(new { error = "Already completed or deferred" });
 
@@ -92,7 +99,7 @@ public static class AssignmentEndpoints
             return Results.Ok(AssignmentHelpers.ToDto(assignment, assignment.Course, assignment.Course?.Subject, assignment.PlannedDay));
         });
 
-        group.MapPost("/{id:int}/defer", async (int id, AuthService auth, HttpContext http, AppDbContext db) =>
+        group.MapPost("/{id:int}/defer", async (int id, AuthService auth, HttpContext http, AppDbContext db, DeferralService deferrals) =>
         {
             var user = await http.RequireUserAsync(auth);
             if (user is null) return Results.Empty;
@@ -106,6 +113,11 @@ public static class AssignmentEndpoints
                 return Results.Forbid();
             if (assignment.Kind != AssignmentKind.Required)
                 return Results.BadRequest(new { error = "Only required assignments can be deferred" });
+
+            await deferrals.MaybeRolloverStaleInProgressAsync(assignment.StudentUserId);
+            await db.Entry(assignment).ReloadAsync();
+            await db.Entry(assignment).Reference(a => a.PlannedDay).LoadAsync();
+
             if (assignment.Status != AssignmentStatus.Assigned)
                 return Results.BadRequest(new { error = "Only assigned work can request deferral" });
 
@@ -393,45 +405,6 @@ public static class AssignmentEndpoints
             .Include(a => a.Course).ThenInclude(c => c.Subject)
             .Include(a => a.PlannedDay)
             .FirstOrDefaultAsync(a => a.Id == id && a.Student.FamilyId == familyId);
-    }
-
-    private static async Task<PlannedDay?> GetOrActivateCurrentDayAsync(AppDbContext db, int studentId)
-    {
-        var today = DateOnly.FromDateTime(DateTime.Today);
-
-        var inProgress = await db.PlannedDays
-            .Where(d => d.StudentUserId == studentId && d.Status == PlannedDayStatus.InProgress)
-            .OrderBy(d => d.SequenceIndex)
-            .FirstOrDefaultAsync();
-        if (inProgress is not null)
-            return inProgress;
-
-        // Keep showing a day completed today so the student still sees what they finished.
-        var completedToday = await db.PlannedDays
-            .Where(d => d.StudentUserId == studentId
-                        && d.Status == PlannedDayStatus.Completed
-                        && d.CalendarDate == today)
-            .OrderByDescending(d => d.SequenceIndex)
-            .FirstOrDefaultAsync();
-        if (completedToday is not null)
-            return completedToday;
-
-        var planned = await db.PlannedDays
-            .Where(d => d.StudentUserId == studentId && d.Status == PlannedDayStatus.Planned)
-            .OrderBy(d => d.SequenceIndex)
-            .FirstOrDefaultAsync();
-        if (planned is not null)
-        {
-            planned.Status = PlannedDayStatus.InProgress;
-            await db.SaveChangesAsync();
-            return planned;
-        }
-
-        // No further planned work — fall back to the most recent completed day.
-        return await db.PlannedDays
-            .Where(d => d.StudentUserId == studentId && d.Status == PlannedDayStatus.Completed)
-            .OrderByDescending(d => d.SequenceIndex)
-            .FirstOrDefaultAsync();
     }
 
     public record CompleteRequest(string? Effort);

@@ -1150,6 +1150,72 @@ th, td {
   color: var(--main-color);
 }
 
+.week-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.week-label {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.week-days {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.week-day {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.75rem 0.85rem;
+  background: var(--surface-strong);
+}
+
+.week-day h3 {
+  font-family: var(--font-display);
+  margin: 0 0 0.45rem;
+  font-size: 1rem;
+}
+
+.week-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.week-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+.week-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.week-item-subject {
+  font-weight: 700;
+}
+
+.week-item-meta {
+  color: var(--sub-color);
+  white-space: nowrap;
+}
+
+.week-empty {
+  margin: 0;
+}
+
 /* Theme page */
 .theme-layout {
   display: grid;

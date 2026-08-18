@@ -105,9 +105,10 @@
         requiredList.innerHTML = "";
         requiredList.classList.remove("is-day-done");
       } else {
-        const done = data.day.status === "completed";
+        const done = data.day.status === "completed" || data.day.status === "partiallycompleted";
         dayMeta.textContent = `Day slot #${data.day.sequenceIndex} · ${data.day.status}` +
-          (done ? " — you are done with required work for this day!" : "");
+          (data.day.status === "completed" ? " — you are done with required work for this day!" :
+           data.day.status === "partiallycompleted" ? " — leftover work moved to the next day." : "");
         requiredList.classList.toggle("is-day-done", done);
 
         requiredList.innerHTML = data.assignments.map(a => {

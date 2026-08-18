@@ -27,10 +27,132 @@ public class DeferralService(AppDbContext db)
         if (currentDay.Status == PlannedDayStatus.Planned)
             currentDay.Status = PlannedDayStatus.InProgress;
 
+        await SlideAssignmentForwardAsync(assignment, currentDay);
+        assignment.Status = AssignmentStatus.Assigned;
+        await MaybeCompleteDayAsync(currentDay);
+        await db.SaveChangesAsync();
+        return (true, null);
+    }
+
+    public async Task<(bool ok, string? error)> RejectDeferralAsync(Assignment assignment)
+    {
+        if (assignment.Status != AssignmentStatus.DeferRequested)
+            return (false, "Assignment is not awaiting deferral");
+
+        assignment.Status = AssignmentStatus.Assigned;
+        await db.SaveChangesAsync();
+        return (true, null);
+    }
+
+    public async Task MaybeCompleteDayAsync(PlannedDay day)
+    {
+        if (PlannedDayStatuses.IsClosed(day.Status))
+            return;
+
+        var required = await db.Assignments
+            .Where(a => a.PlannedDayId == day.Id && a.Kind == AssignmentKind.Required)
+            .ToListAsync();
+
+        // Empty after all required items slid away via deferral — complete if work had started.
+        if (required.Count == 0)
+        {
+            if (day.Status != PlannedDayStatus.InProgress)
+                return;
+        }
+        else if (!required.All(a =>
+                     a.Status is AssignmentStatus.Completed or AssignmentStatus.Deferred))
+        {
+            return;
+        }
+
+        day.Status = PlannedDayStatus.Completed;
+        day.CalendarDate ??= DateOnly.FromDateTime(DateTime.Today);
+        day.CompletedAt = DateTime.UtcNow;
+
+        foreach (var a in required.Where(a => a.Status == AssignmentStatus.Completed && a.ActivityDate is null))
+            a.ActivityDate = day.CalendarDate;
+    }
+
+    /// <summary>
+    /// If the in-progress day has leftover required work and at least one required
+    /// completion on a prior calendar date, slide leftovers forward and close the
+    /// slot as partially completed. Doing nothing on a day does not advance the queue.
+    /// </summary>
+    public async Task MaybeRolloverStaleInProgressAsync(int studentId)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var inProgress = await db.PlannedDays
+            .Where(d => d.StudentUserId == studentId && d.Status == PlannedDayStatus.InProgress)
+            .OrderBy(d => d.SequenceIndex)
+            .FirstOrDefaultAsync();
+        if (inProgress is null)
+            return;
+
+        var required = await db.Assignments
+            .Where(a => a.PlannedDayId == inProgress.Id && a.Kind == AssignmentKind.Required)
+            .ToListAsync();
+
+        var leftovers = required
+            .Where(a => a.Status is AssignmentStatus.Assigned or AssignmentStatus.DeferRequested)
+            .ToList();
+        if (leftovers.Count == 0)
+            return;
+
+        var hasPriorWork = required.Any(a =>
+            a.Status == AssignmentStatus.Completed
+            && a.ActivityDate is not null
+            && a.ActivityDate < today);
+        if (!hasPriorWork)
+            return;
+
+        await CloseDayAsPartialSlidingLeftoversAsync(inProgress, required);
+    }
+
+    public async Task<PlannedDay?> EnsureRolloverAndActivateAsync(int studentId)
+    {
+        await MaybeRolloverStaleInProgressAsync(studentId);
+        return await GetOrActivateCurrentDayAsync(studentId);
+    }
+
+    public async Task SlideUnfinishedRequiredOffDayAsync(PlannedDay day)
+    {
+        var leftovers = await db.Assignments
+            .Where(a => a.PlannedDayId == day.Id
+                        && a.Kind == AssignmentKind.Required
+                        && (a.Status == AssignmentStatus.Assigned
+                            || a.Status == AssignmentStatus.DeferRequested))
+            .OrderBy(a => a.Id)
+            .ToListAsync();
+
+        foreach (var leftover in leftovers)
+            await SlideAssignmentForwardAsync(leftover, day);
+    }
+
+    private async Task CloseDayAsPartialSlidingLeftoversAsync(PlannedDay day, List<Assignment> requiredBeforeSlide)
+    {
+        var completedDates = requiredBeforeSlide
+            .Where(a => a.Status == AssignmentStatus.Completed && a.ActivityDate is not null)
+            .Select(a => a.ActivityDate!.Value)
+            .ToList();
+        var calendarDate = completedDates.Count > 0
+            ? completedDates.Max()
+            : DateOnly.FromDateTime(DateTime.Today);
+
+        await SlideUnfinishedRequiredOffDayAsync(day);
+
+        day.Status = PlannedDayStatus.PartiallyCompleted;
+        day.CalendarDate = calendarDate;
+        day.CompletedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+    }
+
+    private async Task SlideAssignmentForwardAsync(Assignment assignment, PlannedDay fromDay)
+    {
         var laterDays = await db.PlannedDays
             .Where(d => d.StudentUserId == assignment.StudentUserId
-                        && d.SequenceIndex > currentDay.SequenceIndex
-                        && d.Status != PlannedDayStatus.Completed)
+                        && d.SequenceIndex > fromDay.SequenceIndex
+                        && d.Status != PlannedDayStatus.Completed
+                        && d.Status != PlannedDayStatus.PartiallyCompleted)
             .OrderBy(d => d.SequenceIndex)
             .ToListAsync();
 
@@ -64,7 +186,7 @@ public class DeferralService(AppDbContext db)
             var maxSeq = await db.PlannedDays
                 .Where(d => d.StudentUserId == assignment.StudentUserId)
                 .Select(d => (int?)d.SequenceIndex)
-                .MaxAsync() ?? currentDay.SequenceIndex;
+                .MaxAsync() ?? fromDay.SequenceIndex;
 
             var newDay = new PlannedDay
             {
@@ -80,53 +202,55 @@ public class DeferralService(AppDbContext db)
         for (var i = chain.Count - 1; i >= 0; i--)
         {
             chain[i].PlannedDayId = laterDays[i].Id;
-            chain[i].Status = AssignmentStatus.Assigned;
+            // Keep pending parent requests on the Requests page when leftovers
+            // slide during rollover or a parent-forced full-day close.
+            if (chain[i].Status != AssignmentStatus.DeferRequested)
+                chain[i].Status = AssignmentStatus.Assigned;
             chain[i].ActivityDate = null;
         }
 
-        // Persist slides first so day-completion queries see the updated PlannedDayId values.
+        // Persist slides first so later leftover slides and day-completion queries see new PlannedDayId values.
         await db.SaveChangesAsync();
-        await MaybeCompleteDayAsync(currentDay);
-        await db.SaveChangesAsync();
-        return (true, null);
     }
 
-    public async Task<(bool ok, string? error)> RejectDeferralAsync(Assignment assignment)
+    private async Task<PlannedDay?> GetOrActivateCurrentDayAsync(int studentId)
     {
-        if (assignment.Status != AssignmentStatus.DeferRequested)
-            return (false, "Assignment is not awaiting deferral");
+        var today = DateOnly.FromDateTime(DateTime.Today);
 
-        assignment.Status = AssignmentStatus.Assigned;
-        await db.SaveChangesAsync();
-        return (true, null);
-    }
+        var inProgress = await db.PlannedDays
+            .Where(d => d.StudentUserId == studentId && d.Status == PlannedDayStatus.InProgress)
+            .OrderBy(d => d.SequenceIndex)
+            .FirstOrDefaultAsync();
+        if (inProgress is not null)
+            return inProgress;
 
-    public async Task MaybeCompleteDayAsync(PlannedDay day)
-    {
-        if (day.Status == PlannedDayStatus.Completed)
-            return;
+        // Keep showing a day completed today so the student still sees what they finished.
+        var completedToday = await db.PlannedDays
+            .Where(d => d.StudentUserId == studentId
+                        && d.Status == PlannedDayStatus.Completed
+                        && d.CalendarDate == today)
+            .OrderByDescending(d => d.SequenceIndex)
+            .FirstOrDefaultAsync();
+        if (completedToday is not null)
+            return completedToday;
 
-        var required = await db.Assignments
-            .Where(a => a.PlannedDayId == day.Id && a.Kind == AssignmentKind.Required)
-            .ToListAsync();
-
-        // Empty after all required items slid away via deferral — complete if work had started.
-        if (required.Count == 0)
+        var planned = await db.PlannedDays
+            .Where(d => d.StudentUserId == studentId && d.Status == PlannedDayStatus.Planned)
+            .OrderBy(d => d.SequenceIndex)
+            .FirstOrDefaultAsync();
+        if (planned is not null)
         {
-            if (day.Status != PlannedDayStatus.InProgress)
-                return;
-        }
-        else if (!required.All(a =>
-                     a.Status is AssignmentStatus.Completed or AssignmentStatus.Deferred))
-        {
-            return;
+            planned.Status = PlannedDayStatus.InProgress;
+            await db.SaveChangesAsync();
+            return planned;
         }
 
-        day.Status = PlannedDayStatus.Completed;
-        day.CalendarDate ??= DateOnly.FromDateTime(DateTime.Today);
-        day.CompletedAt = DateTime.UtcNow;
-
-        foreach (var a in required.Where(a => a.Status == AssignmentStatus.Completed && a.ActivityDate is null))
-            a.ActivityDate = day.CalendarDate;
+        // No further planned work — fall back to the most recent closed day.
+        return await db.PlannedDays
+            .Where(d => d.StudentUserId == studentId
+                        && (d.Status == PlannedDayStatus.Completed
+                            || d.Status == PlannedDayStatus.PartiallyCompleted))
+            .OrderByDescending(d => d.SequenceIndex)
+            .FirstOrDefaultAsync();
     }
 }

@@ -36,13 +36,25 @@
     <div class="stats" id="stats"></div>
 
     <div class="panel">
+      <h2>Week view</h2>
+      <p class="muted">Completed work for the selected Sunday–Saturday week. Hours count required completions plus acknowledged optional work.</p>
+      <div class="week-nav">
+        <button type="button" class="secondary" id="weekPrev">Previous</button>
+        <div class="week-label" id="weekLabel"></div>
+        <button type="button" class="secondary" id="weekNext">Next</button>
+      </div>
+      <div class="stats" id="weekStats"></div>
+      <div class="week-days" id="weekDays"></div>
+    </div>
+
+    <div class="panel">
       <h2>Day calendar</h2>
-      <p class="muted">Full days are planned-day slots marked complete. Hours include required completions plus acknowledged optional work.</p>
+      <p class="muted">Full days are planned-day slots marked complete. Partial days had some required work done; leftovers moved to the next queue slot. Hours include required completions plus acknowledged optional work.</p>
       <table>
         <thead>
           <tr>
             <th>Date</th>
-            <th>Full day</th>
+            <th>Day</th>
             <th>Hours</th>
             <th>Required min</th>
             <th>Optional min</th>
@@ -54,74 +66,6 @@
     </div>
   </div>
   <script src="/js/app.js"></script>
-  <script>
-    async function loadReport() {
-      const me = await requireAuth("parent");
-      await renderTopbar(me, "reports");
-
-      const students = await api.get("/api/catalog/students");
-      const studentSelect = document.getElementById("studentId");
-      const prev = studentSelect.value;
-      studentSelect.innerHTML = students.map(s => `<option value="${s.id}">${s.displayName}</option>`).join("");
-      if (prev) studentSelect.value = prev;
-
-      const family = await api.get("/api/reports/family");
-      document.getElementById("targetHours").value = family.targetHoursPerYear;
-
-      const to = document.getElementById("to");
-      const from = document.getElementById("from");
-      if (!to.value) to.value = new Date().toISOString().slice(0, 10);
-      if (!from.value) {
-        const d = new Date();
-        d.setFullYear(d.getFullYear() - 1);
-        d.setDate(d.getDate() + 1);
-        from.value = d.toISOString().slice(0, 10);
-      }
-
-      const studentId = studentSelect.value;
-      if (!studentId) return;
-
-      const report = await api.get(`/api/reports/${studentId}?from=${from.value}&to=${to.value}`);
-      document.getElementById("stats").innerHTML = `
-        <div class="stat"><div class="muted">Total hours</div><div class="value">${report.totalHours}</div></div>
-        <div class="stat"><div class="muted">Target</div><div class="value">${report.targetHoursPerYear}</div></div>
-        <div class="stat"><div class="muted">Remaining</div><div class="value">${report.hoursRemaining}</div></div>
-        <div class="stat"><div class="muted">Full days</div><div class="value">${report.fullDayCount}</div></div>
-        <div class="stat"><div class="muted">Active days</div><div class="value">${report.activeDayCount}</div></div>
-      `;
-
-      document.getElementById("calendar").innerHTML = report.calendar.map(d => `
-        <tr>
-          <td>${d.date}</td>
-          <td>${d.isFullDay ? "Yes" : "—"}</td>
-          <td>${d.hours}</td>
-          <td>${d.requiredMinutes}</td>
-          <td>${d.optionalMinutes}</td>
-          <td>${d.assignmentCount}</td>
-        </tr>
-      `).join("") || `<tr><td colspan="6" class="muted">No activity in range.</td></tr>`;
-    }
-
-    document.getElementById("filters").onsubmit = async (e) => {
-      e.preventDefault();
-      try { await loadReport(); }
-      catch (err) { showFlash(document.getElementById("flash"), err.message, true); }
-    };
-
-    document.getElementById("targetForm").onsubmit = async (e) => {
-      e.preventDefault();
-      try {
-        await api.put("/api/reports/family/target-hours", {
-          targetHoursPerYear: Number(document.getElementById("targetHours").value)
-        });
-        showFlash(document.getElementById("flash"), "Target saved");
-        await loadReport();
-      } catch (err) {
-        showFlash(document.getElementById("flash"), err.message, true);
-      }
-    };
-
-    loadReport().catch(() => {});
-  </script>
+  <script src="/js/reports.js"></script>
 </body>
 </html>
