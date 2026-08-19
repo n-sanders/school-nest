@@ -82,6 +82,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(x => x.CatalogAssignment).WithMany().HasForeignKey(x => x.CatalogAssignmentId);
             e.HasOne(x => x.OptionalActivity).WithMany().HasForeignKey(x => x.OptionalActivityId);
             e.HasOne(x => x.PlannedDay).WithMany(x => x.Assignments).HasForeignKey(x => x.PlannedDayId);
+            e.Property(x => x.CarryoverKind).HasDefaultValue(CarryoverKind.None);
         });
 
         modelBuilder.Entity<GeneratedBackground>(e =>

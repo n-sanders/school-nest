@@ -16,7 +16,6 @@ public static class CorrectionEndpoints
             AuthService auth,
             HttpContext http,
             AppDbContext db,
-            DeferralService deferrals,
             string? around,
             int? dayId) =>
         {
@@ -27,8 +26,6 @@ public static class CorrectionEndpoints
                 u.Id == studentId && u.FamilyId == user.FamilyId && u.Role == UserRole.Student);
             if (student is null)
                 return Results.NotFound(new { error = "Student not found" });
-
-            await deferrals.MaybeRolloverStaleInProgressAsync(studentId);
 
             var aroundDate = DateOnly.FromDateTime(DateTime.Today);
             if (!string.IsNullOrWhiteSpace(around) && DateOnly.TryParse(around, out var parsedAround))
@@ -97,7 +94,7 @@ public static class CorrectionEndpoints
                 around = aroundDate.ToString("yyyy-MM-dd"),
                 selectedDayId = selected?.Id,
                 days = pickerDays.Select(ToDaySummary),
-                day = selected is null ? null : ToDayDetail(selected)
+                day = selected is null ? null : ToDayDetail(selected, AssignmentHelpers.SourceStartedOnFromDays(allDays))
             });
         });
 
@@ -153,6 +150,7 @@ public static class CorrectionEndpoints
 
                 day.Status = PlannedDayStatus.Completed;
                 day.CalendarDate = calendarDate;
+                day.StartedOn ??= calendarDate;
                 day.CompletedAt ??= DateTime.UtcNow;
             }
             else if (req.Completed == false)
@@ -173,6 +171,7 @@ public static class CorrectionEndpoints
                 }
 
                 day.Status = PlannedDayStatus.InProgress;
+                day.StartedOn ??= day.CalendarDate;
                 day.CalendarDate = null;
                 day.CompletedAt = null;
             }
@@ -201,7 +200,7 @@ public static class CorrectionEndpoints
                     .ThenInclude(a => a.Course)
                         .ThenInclude(c => c!.Subject)
                 .FirstAsync(d => d.Id == day.Id);
-            return Results.Ok(ToDayDetail(fresh));
+            return Results.Ok(ToDayDetail(fresh, await AssignmentHelpers.LoadSourceStartedOnAsync(db, fresh.Assignments)));
         });
 
         group.MapPatch("/assignments/{id:int}", async (
@@ -274,8 +273,14 @@ public static class CorrectionEndpoints
             }
 
             await db.SaveChangesAsync();
+            var sourceDates = await AssignmentHelpers.LoadSourceStartedOnAsync(db, [assignment]);
+            DateOnly? sourceStartedOn = assignment.SourcePlannedDayId is int sid
+                && sourceDates.TryGetValue(sid, out var started)
+                    ? started
+                    : null;
             return Results.Ok(AssignmentHelpers.ToDto(
-                assignment, assignment.Course, assignment.Course?.Subject, assignment.PlannedDay));
+                assignment, assignment.Course, assignment.Course?.Subject, assignment.PlannedDay,
+                sourceStartedOn));
         });
 
         return group;
@@ -297,27 +302,37 @@ public static class CorrectionEndpoints
             d.SequenceIndex,
             status = d.Status.ToString().ToLowerInvariant(),
             calendarDate = d.CalendarDate?.ToString("yyyy-MM-dd"),
+            startedOn = d.StartedOn?.ToString("yyyy-MM-dd"),
             completedAt = d.CompletedAt,
             assignmentCount = required.Count,
             completedCount = required.Count(a => a.Status == AssignmentStatus.Completed)
         };
     }
 
-    private static object ToDayDetail(PlannedDay d) => new
+    private static object ToDayDetail(PlannedDay d, IReadOnlyDictionary<int, DateOnly>? sourceDates = null)
     {
-        d.Id,
-        d.StudentUserId,
-        d.SequenceIndex,
-        status = d.Status.ToString().ToLowerInvariant(),
-        calendarDate = d.CalendarDate?.ToString("yyyy-MM-dd"),
-        completedAt = d.CompletedAt,
-        assignments = d.Assignments
-            .OrderBy(a => a.Kind)
-            .ThenBy(a => a.Course?.Subject?.Name)
-            .ThenBy(a => a.Name)
-            .Select(a => AssignmentHelpers.ToDto(a, a.Course, a.Course?.Subject, d))
-            .ToList()
-    };
+        sourceDates ??= new Dictionary<int, DateOnly>();
+        return new
+        {
+            d.Id,
+            d.StudentUserId,
+            d.SequenceIndex,
+            status = d.Status.ToString().ToLowerInvariant(),
+            calendarDate = d.CalendarDate?.ToString("yyyy-MM-dd"),
+            startedOn = d.StartedOn?.ToString("yyyy-MM-dd"),
+            completedAt = d.CompletedAt,
+            assignments = d.Assignments
+                .OrderBy(a => a.Kind)
+                .ThenBy(a => a.Course?.Subject?.Name)
+                .ThenBy(a => a.Name)
+                .Select(a => AssignmentHelpers.ToDto(
+                    a, a.Course, a.Course?.Subject, d,
+                    a.SourcePlannedDayId is int sid && sourceDates.TryGetValue(sid, out var started)
+                        ? started
+                        : null))
+                .ToList()
+        };
+    }
 
     public record DayCorrectionRequest(bool? Completed, string? CalendarDate);
     public record AssignmentCorrectionRequest(bool? Completed, string? ActivityDate);

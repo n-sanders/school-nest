@@ -11,7 +11,7 @@ public static class PlannerEndpoints
     {
         var group = app.MapGroup("/api/planner");
 
-        group.MapGet("/{studentId:int}/days", async (int studentId, AuthService auth, HttpContext http, AppDbContext db, DeferralService deferrals) =>
+        group.MapGet("/{studentId:int}/days", async (int studentId, AuthService auth, HttpContext http, AppDbContext db) =>
         {
             var user = await http.RequireParentAsync(auth);
             if (user is null) return Results.Empty;
@@ -21,8 +21,6 @@ public static class PlannerEndpoints
             if (student is null)
                 return Results.NotFound(new { error = "Student not found" });
 
-            await deferrals.MaybeRolloverStaleInProgressAsync(studentId);
-
             var days = await db.PlannedDays
                 .Where(d => d.StudentUserId == studentId)
                 .OrderBy(d => d.SequenceIndex)
@@ -31,16 +29,24 @@ public static class PlannerEndpoints
                 .ThenInclude(c => c.Subject)
                 .ToListAsync();
 
+            var sourceDates = await AssignmentHelpers.LoadSourceStartedOnAsync(
+                db, days.SelectMany(d => d.Assignments));
+
             return Results.Ok(days.Select(d => new
             {
                 d.Id,
                 d.SequenceIndex,
                 status = d.Status.ToString().ToLowerInvariant(),
                 calendarDate = d.CalendarDate?.ToString("yyyy-MM-dd"),
+                startedOn = d.StartedOn?.ToString("yyyy-MM-dd"),
                 assignments = d.Assignments
                     .OrderBy(a => a.Course.Subject.SortOrder)
                     .ThenBy(a => a.Course.SortOrder)
-                    .Select(a => AssignmentHelpers.ToDto(a, a.Course, a.Course.Subject, d))
+                    .Select(a => AssignmentHelpers.ToDto(
+                        a, a.Course, a.Course.Subject, d,
+                        a.SourcePlannedDayId is int sid && sourceDates.TryGetValue(sid, out var started)
+                            ? started
+                            : null))
             }));
         });
 
@@ -65,7 +71,7 @@ public static class PlannerEndpoints
             };
             db.PlannedDays.Add(day);
             await db.SaveChangesAsync();
-            return Results.Ok(new { day.Id, day.SequenceIndex, status = "planned", assignments = Array.Empty<object>() });
+            return Results.Ok(new { day.Id, day.SequenceIndex, status = "planned", startedOn = (string?)null, assignments = Array.Empty<object>() });
         });
 
         group.MapPost("/{studentId:int}/days/{dayId:int}/assignments", async (

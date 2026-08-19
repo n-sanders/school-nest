@@ -71,6 +71,11 @@ public static class SchemaPatches
                 "CREATE INDEX IF NOT EXISTS IX_RejectedImagePrompts_StudentUserId ON RejectedImagePrompts (StudentUserId);");
             await ExecuteAsync(conn,
                 "CREATE INDEX IF NOT EXISTS IX_RejectedImagePrompts_CreatedAt ON RejectedImagePrompts (CreatedAt);");
+
+            await AddColumnIfMissingAsync(conn, "PlannedDays", "StartedOn", "TEXT");
+            await AddColumnIfMissingAsync(
+                conn, "Assignments", "CarryoverKind", "INTEGER NOT NULL DEFAULT 0");
+            await AddColumnIfMissingAsync(conn, "Assignments", "SourcePlannedDayId", "INTEGER");
         }
         finally
         {

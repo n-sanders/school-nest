@@ -56,6 +56,18 @@ function effortToggleValue(input) {
   return input?.checked ? "high" : "low";
 }
 
+function carryoverBadge(kind, sourceStartedOn) {
+  if (kind === "leftover") {
+    const label = sourceStartedOn ? `Unfinished from ${sourceStartedOn}` : "Unfinished";
+    return `<span class="badge pending">${label}</span>`;
+  }
+  if (kind === "deferred") {
+    const label = sourceStartedOn ? `Deferred from ${sourceStartedOn}` : "Deferred";
+    return `<span class="badge defer">${label}</span>`;
+  }
+  return "";
+}
+
 function statusBadge(status) {
   const map = {
     assigned: ["Assigned", ""],

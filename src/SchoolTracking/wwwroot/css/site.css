@@ -1897,6 +1897,51 @@ button.slim {
   min-width: 0;
 }
 
+.leftover-dialog {
+  width: min(92vw, 32rem);
+  padding: 1.2rem 1.3rem 1.15rem;
+  position: relative;
+}
+
+.leftover-close {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  border: 0;
+  background: transparent;
+  color: var(--sub-color);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.2rem 0.45rem;
+}
+
+.leftover-close:hover {
+  color: var(--text-color);
+}
+
+.leftover-dialog h2 {
+  margin-bottom: 0.2rem;
+}
+
+.leftover-list {
+  max-height: min(50vh, 22rem);
+  overflow: auto;
+  margin: 0.85rem 0 1rem;
+  padding: 0.15rem;
+}
+
+.leftover-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.today-carryover {
+  font-size: 0.82rem;
+  color: var(--colorful-error-color);
+  margin-top: 0.15rem;
+}
+
 /* Catalog browse */
 .catalog-browse {
   padding: 0.75rem 1.15rem;

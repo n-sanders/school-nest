@@ -40,6 +40,13 @@ public enum AssignmentStatus
     Deferred
 }
 
+public enum CarryoverKind
+{
+    None,
+    Deferred,
+    Leftover
+}
+
 public static class EffortMinutes
 {
     public const int Low = 30;

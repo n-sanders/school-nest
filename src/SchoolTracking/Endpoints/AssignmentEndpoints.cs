@@ -18,9 +18,35 @@ public static class AssignmentEndpoints
             if (!user.IsStudent)
                 return Results.BadRequest(new { error = "Students only" });
 
-            var day = await deferrals.EnsureRolloverAndActivateAsync(user.Id);
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var optionalToday = await db.Assignments
+                .Include(a => a.Course).ThenInclude(c => c.Subject)
+                .Where(a => a.StudentUserId == user.Id && a.Kind == AssignmentKind.Optional && a.ActivityDate == today)
+                .OrderByDescending(a => a.Id)
+                .ToListAsync();
+            var optional = optionalToday.Select(a => AssignmentHelpers.ToDto(a, a.Course, a.Course?.Subject));
+
+            var pending = await deferrals.GetPendingLeftoversAsync(user.Id);
+            if (pending is not null)
+            {
+                return Results.Ok(new
+                {
+                    pendingLeftovers = new
+                    {
+                        day = ToTodayDay(pending.Day),
+                        assignments = pending.Assignments.Select(a =>
+                            AssignmentHelpers.ToDto(a, a.Course, a.Course?.Subject, pending.Day))
+                    },
+                    day = (object?)null,
+                    assignments = Array.Empty<object>(),
+                    optional,
+                    message = "Confirm leftover work before starting today."
+                });
+            }
+
+            var day = await deferrals.GetCurrentDayAsync(user.Id);
             if (day is null)
-                return Results.Ok(new { day = (object?)null, assignments = Array.Empty<object>(), message = "No planned days yet. Ask a parent to plan work." });
+                return Results.Ok(new { pendingLeftovers = (object?)null, day = (object?)null, assignments = Array.Empty<object>(), optional, message = "No planned days yet. Ask a parent to plan work." });
 
             await db.Entry(day).Collection(d => d.Assignments).Query()
                 .Include(a => a.Course).ThenInclude(c => c.Subject)
@@ -30,28 +56,51 @@ public static class AssignmentEndpoints
                 .Where(a => a.Kind == AssignmentKind.Required)
                 .OrderBy(a => a.Course!.Subject.SortOrder)
                 .ThenBy(a => a.Course!.SortOrder)
-                .Select(a => AssignmentHelpers.ToDto(a, a.Course, a.Course!.Subject, day))
                 .ToList();
-
-            var today = DateOnly.FromDateTime(DateTime.Today);
-            var optionalToday = await db.Assignments
-                .Include(a => a.Course).ThenInclude(c => c.Subject)
-                .Where(a => a.StudentUserId == user.Id && a.Kind == AssignmentKind.Optional && a.ActivityDate == today)
-                .OrderByDescending(a => a.Id)
-                .ToListAsync();
+            var sourceDates = await AssignmentHelpers.LoadSourceStartedOnAsync(db, required);
 
             return Results.Ok(new
             {
-                day = new
-                {
-                    day.Id,
-                    day.SequenceIndex,
-                    status = day.Status.ToString().ToLowerInvariant(),
-                    calendarDate = day.CalendarDate?.ToString("yyyy-MM-dd") ?? today.ToString("yyyy-MM-dd")
-                },
-                assignments = required,
-                optional = optionalToday.Select(a => AssignmentHelpers.ToDto(a, a.Course, a.Course?.Subject, day))
+                pendingLeftovers = (object?)null,
+                day = ToTodayDay(day),
+                assignments = required.Select(a => AssignmentHelpers.ToDto(
+                    a, a.Course, a.Course!.Subject, day,
+                    a.SourcePlannedDayId is int sid && sourceDates.TryGetValue(sid, out var started)
+                        ? started
+                        : null)),
+                optional
             });
+        });
+
+        group.MapPost("/today/resolve-leftovers", async (
+            ResolveLeftoversRequest req,
+            AuthService auth,
+            HttpContext http,
+            DeferralService deferrals) =>
+        {
+            var user = await http.RequireUserAsync(auth);
+            if (user is null) return Results.Empty;
+            if (!user.IsStudent)
+                return Results.BadRequest(new { error = "Students only" });
+
+            var completedIds = req.CompletedIds ?? [];
+            var efforts = new Dictionary<int, EffortLevel>();
+            if (req.Efforts is not null)
+            {
+                foreach (var (key, value) in req.Efforts)
+                {
+                    if (!int.TryParse(key, out var id))
+                        return Results.BadRequest(new { error = "efforts keys must be assignment ids" });
+                    if (!AssignmentHelpers.TryParseEffort(value, out var effort))
+                        return Results.BadRequest(new { error = "effort must be low or high" });
+                    efforts[id] = effort;
+                }
+            }
+
+            var (ok, error) = await deferrals.ResolveLeftoversAsync(user.Id, completedIds, efforts);
+            if (!ok)
+                return Results.BadRequest(new { error });
+            return Results.Ok(new { ok = true });
         });
 
         group.MapPost("/{id:int}/complete", async (int id, CompleteRequest req, AuthService auth, HttpContext http, AppDbContext db, DeferralService deferrals) =>
@@ -68,9 +117,9 @@ public static class AssignmentEndpoints
 
             if (assignment.Kind == AssignmentKind.Required)
             {
-                await deferrals.MaybeRolloverStaleInProgressAsync(assignment.StudentUserId);
-                await db.Entry(assignment).ReloadAsync();
-                await db.Entry(assignment).Reference(a => a.PlannedDay).LoadAsync();
+                var pending = await deferrals.GetPendingLeftoversAsync(assignment.StudentUserId);
+                if (pending is not null)
+                    return Results.BadRequest(new { error = "Confirm leftover work from the previous school day first" });
             }
 
             if (assignment.Status is AssignmentStatus.Completed or AssignmentStatus.Deferred)
@@ -90,8 +139,7 @@ public static class AssignmentEndpoints
             if (assignment.Kind == AssignmentKind.Required && assignment.PlannedDayId is not null)
             {
                 var day = await db.PlannedDays.FirstAsync(d => d.Id == assignment.PlannedDayId.Value);
-                if (day.Status == PlannedDayStatus.Planned)
-                    day.Status = PlannedDayStatus.InProgress;
+                deferrals.StartDayOnFirstComplete(day);
                 await deferrals.MaybeCompleteDayAsync(day);
             }
 
@@ -114,9 +162,9 @@ public static class AssignmentEndpoints
             if (assignment.Kind != AssignmentKind.Required)
                 return Results.BadRequest(new { error = "Only required assignments can be deferred" });
 
-            await deferrals.MaybeRolloverStaleInProgressAsync(assignment.StudentUserId);
-            await db.Entry(assignment).ReloadAsync();
-            await db.Entry(assignment).Reference(a => a.PlannedDay).LoadAsync();
+            var pending = await deferrals.GetPendingLeftoversAsync(assignment.StudentUserId);
+            if (pending is not null)
+                return Results.BadRequest(new { error = "Confirm leftover work from the previous school day first" });
 
             if (assignment.Status != AssignmentStatus.Assigned)
                 return Results.BadRequest(new { error = "Only assigned work can request deferral" });
@@ -407,7 +455,18 @@ public static class AssignmentEndpoints
             .FirstOrDefaultAsync(a => a.Id == id && a.Student.FamilyId == familyId);
     }
 
+    private static object ToTodayDay(PlannedDay day) => new
+    {
+        day.Id,
+        day.SequenceIndex,
+        status = day.Status.ToString().ToLowerInvariant(),
+        calendarDate = day.CalendarDate?.ToString("yyyy-MM-dd"),
+        startedOn = day.StartedOn?.ToString("yyyy-MM-dd"),
+        today = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd")
+    };
+
     public record CompleteRequest(string? Effort);
+    public record ResolveLeftoversRequest(int[]? CompletedIds, Dictionary<string, string>? Efforts);
     public record EffortRequest(string Effort);
     public record OptionalRequest(
         int? StudentId,

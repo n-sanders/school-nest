@@ -117,6 +117,7 @@
           <span class="day-assignment-name">${esc(a.name)}</span>
           <span class="muted day-assignment-effort">${esc(a.effort)}</span>
           ${a.status !== "assigned" ? statusBadge(a.status) : ""}
+          ${carryoverBadge(a.carryoverKind, a.sourceStartedOn)}
         </div>
         ${removable ? `<div class="day-assignment-actions">
           <button class="danger slim" data-remove="${a.id}" type="button" title="Remove assignment">✕</button>
@@ -125,11 +126,12 @@
   }
 
   function dayCard(studentId, d) {
+    const started = d.startedOn ? ` · started ${d.startedOn}` : "";
     const status = d.status === "inprogress" ? " · in progress" : "";
     const items = d.assignments.map(a => assignmentItem(a, d)).join("");
     return `
       <div class="day-slot planned" data-student="${studentId}" data-day="${d.id}">
-        <h3>Day #${d.sequenceIndex}${status}</h3>
+        <h3>Day #${d.sequenceIndex}${status}${started}</h3>
         <ul class="day-assignments">${items || `<li class="muted day-empty">Drop a subject here.</li>`}</ul>
       </div>`;
   }

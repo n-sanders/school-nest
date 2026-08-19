@@ -40,6 +40,15 @@ public static class SeedData
             }
             await db.SaveChangesAsync();
             await CatalogDefaults.EnsureNextLessonForEmptyCoursesAsync(db);
+
+            // Only run when legacy rows still need StartedOn / Planned revert.
+            var needsDayStartBackfill = await db.PlannedDays.AnyAsync(d =>
+                d.StartedOn == null
+                && (d.Status == PlannedDayStatus.InProgress
+                    || d.Status == PlannedDayStatus.Completed
+                    || d.Status == PlannedDayStatus.PartiallyCompleted));
+            if (needsDayStartBackfill)
+                await BackfillDayStartAnchoringAsync(db);
             return;
         }
 
@@ -121,6 +130,48 @@ public static class SeedData
             new OptionalActivity { FamilyId = family.Id, Name = "Nature walk", DefaultEffort = EffortLevel.Low, SortOrder = 2 },
             new OptionalActivity { FamilyId = family.Id, Name = "Extra practice", DefaultEffort = EffortLevel.Low, SortOrder = 3 }
         );
+
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Additive backfill only: never rewrites completed assignment history.
+    /// Closed days get StartedOn from CalendarDate. In-progress days with no
+    /// completions revert to Planned (they were auto-activated by a page load).
+    /// </summary>
+    private static async Task BackfillDayStartAnchoringAsync(AppDbContext db)
+    {
+        var days = await db.PlannedDays.Include(d => d.Assignments).ToListAsync();
+        foreach (var day in days)
+        {
+            if (PlannedDayStatuses.IsClosed(day.Status))
+            {
+                day.StartedOn ??= day.CalendarDate;
+                continue;
+            }
+
+            if (day.Status != PlannedDayStatus.InProgress)
+                continue;
+
+            var completed = day.Assignments
+                .Where(a => a.Kind == AssignmentKind.Required && a.Status == AssignmentStatus.Completed)
+                .ToList();
+            if (completed.Count == 0)
+            {
+                day.Status = PlannedDayStatus.Planned;
+                day.StartedOn = null;
+                continue;
+            }
+
+            var started = completed
+                .Where(a => a.ActivityDate is not null)
+                .Select(a => a.ActivityDate!.Value)
+                .ToList();
+            if (started.Count > 0)
+                day.StartedOn ??= started.Min();
+            // Completions without ActivityDate: leave StartedOn null; leftover
+            // detection falls back to ActivityDate < today when possible.
+        }
 
         await db.SaveChangesAsync();
     }

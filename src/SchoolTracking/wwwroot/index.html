@@ -52,9 +52,41 @@
       <aside class="layout-stage layout-stage-b" aria-hidden="true"></aside>
     </div>
   </div>
+  <dialog id="leftoverDialog" class="picker-dialog leftover-dialog">
+    <button type="button" class="leftover-close" id="leftoverClose" aria-label="Confirm and close">×</button>
+    <h2 id="leftoverTitle">Confirm leftover work</h2>
+    <p id="leftoverCopy" class="muted"></p>
+    <ul class="list today-task-list leftover-list" id="leftoverList"></ul>
+    <div class="leftover-actions">
+      <button type="button" id="leftoverConfirm">Confirm</button>
+    </div>
+  </dialog>
   <script src="/js/app.js"></script>
   <script>
     document.getElementById("optEffortWrap").innerHTML = effortToggle("optEffort", "low");
+
+    const leftoverDialog = document.getElementById("leftoverDialog");
+    let leftoverSubmitting = false;
+
+    function formatDay(iso) {
+      if (!iso) return "";
+      const [y, m, d] = iso.split("-").map(Number);
+      return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+        weekday: "long", month: "long", day: "numeric"
+      });
+    }
+
+    function carryoverNote(a) {
+      if (a.carryoverKind === "leftover") {
+        const when = a.sourceStartedOn ? formatDay(a.sourceStartedOn) : "an earlier day";
+        return `<div class="today-carryover">Unfinished from ${escapeHtml(when)}</div>`;
+      }
+      if (a.carryoverKind === "deferred") {
+        const when = a.sourceStartedOn ? formatDay(a.sourceStartedOn) : "an earlier day";
+        return `<div class="today-carryover">Deferred from ${escapeHtml(when)}</div>`;
+      }
+      return "";
+    }
 
     function setEffortToggle(name, value) {
       const input = document.querySelector(`input.effort-toggle-input[name="${name}"]`);
@@ -89,6 +121,7 @@
       };
       syncOptionalNameField();
 
+      leftoverSubmitting = false;
       const data = await api.get("/api/assignments/today");
       const dayMeta = document.getElementById("dayMeta");
       const requiredList = document.getElementById("requiredList");
@@ -100,15 +133,29 @@
         ? `(${optionalItems.length} today)`
         : "";
 
-      if (!data.day) {
+      if (data.pendingLeftovers) {
+        dayMeta.textContent = data.message || "Confirm leftover work before starting today.";
+        requiredList.innerHTML = "";
+        requiredList.classList.remove("is-day-done");
+        openLeftoverDialog(data.pendingLeftovers);
+      } else if (leftoverDialog.open) {
+        leftoverDialog.close();
+      }
+
+      if (!data.pendingLeftovers && !data.day) {
         dayMeta.textContent = data.message || "Nothing planned.";
         requiredList.innerHTML = "";
         requiredList.classList.remove("is-day-done");
-      } else {
+      } else if (data.day) {
         const done = data.day.status === "completed" || data.day.status === "partiallycompleted";
-        dayMeta.textContent = `Day slot #${data.day.sequenceIndex} · ${data.day.status}` +
-          (data.day.status === "completed" ? " — you are done with required work for this day!" :
-           data.day.status === "partiallycompleted" ? " — leftover work moved to the next day." : "");
+        const todayLabel = formatDay(data.day.today);
+        const startedLabel = data.day.startedOn ? formatDay(data.day.startedOn) : "";
+        let extra = "";
+        if (data.day.status === "completed") extra = " — you are done with required work for this day!";
+        else if (data.day.status === "partiallycompleted") extra = " — leftover work moved to the next day.";
+        else if (data.day.status === "planned") extra = ` — not started. First checkbox starts ${todayLabel}.`;
+        else if (startedLabel) extra = ` — started ${startedLabel}`;
+        dayMeta.textContent = `Day slot #${data.day.sequenceIndex} · ${data.day.status}${extra}`;
         requiredList.classList.toggle("is-day-done", done);
 
         requiredList.innerHTML = data.assignments.map(a => {
@@ -117,8 +164,8 @@
           const toggleDisabled = !assigned && !completed;
           const title = `${a.courseName} · ${a.name}`;
           const nameHtml = a.url
-            ? `<a class="today-task-name" href="${a.url}" target="_blank" rel="noopener">${title}</a>`
-            : `<span class="today-task-name">${title}</span>`;
+            ? `<a class="today-task-name" href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${escapeHtml(title)}</a>`
+            : `<span class="today-task-name">${escapeHtml(title)}</span>`;
           const sideAction = assigned
             ? `<button type="button" class="today-task-defer" data-defer="${a.id}">Request deferral</button>`
             : completed
@@ -131,13 +178,14 @@
                 data-complete="${a.id}"
                 ${completed ? "checked" : ""}
                 ${assigned ? "" : "disabled"}
-                aria-label="Mark ${title} complete" />
+                aria-label="Mark ${escapeHtml(title)} complete" />
               <span class="today-task-checkbox-ring" aria-hidden="true"></span>
             </label>
             <div class="today-task-body">
               ${nameHtml}
-              <div class="today-task-meta muted">${a.subjectName}</div>
-              ${a.description ? `<div class="today-task-desc muted">${a.description}</div>` : ""}
+              <div class="today-task-meta muted">${escapeHtml(a.subjectName)}</div>
+              ${carryoverNote(a)}
+              ${a.description ? `<div class="today-task-desc muted">${escapeHtml(a.description)}</div>` : ""}
             </div>
             <div class="today-task-side">
               ${effortToggle(`effort-${a.id}`, a.effort, { disabled: toggleDisabled })}
@@ -226,6 +274,69 @@
         }
       };
     }
+
+    function openLeftoverDialog(pending) {
+      const started = pending.day?.startedOn;
+      const when = started ? formatDay(started) : "the previous school day";
+      document.getElementById("leftoverTitle").textContent = "Confirm leftover work";
+      document.getElementById("leftoverCopy").textContent =
+        `These were not checked off on ${when}. Check anything you finished and forgot to mark. Closing this confirms the rest were not done.`;
+      const list = document.getElementById("leftoverList");
+      list.innerHTML = (pending.assignments || []).map(a => {
+        const title = `${a.courseName} · ${a.name}`;
+        return `
+          <li class="today-task leftover-item" data-id="${a.id}">
+            <label class="today-task-check">
+              <input type="checkbox" class="today-task-checkbox leftover-done"
+                data-leftover-id="${a.id}"
+                aria-label="Mark ${escapeHtml(title)} done for ${escapeHtml(when)}" />
+              <span class="today-task-checkbox-ring" aria-hidden="true"></span>
+            </label>
+            <div class="today-task-body">
+              <span class="today-task-name">${escapeHtml(title)}</span>
+              <div class="today-task-meta muted">${escapeHtml(a.subjectName)}</div>
+            </div>
+            <div class="today-task-side">
+              ${effortToggle(`leftover-effort-${a.id}`, a.effort)}
+            </div>
+          </li>`;
+      }).join("") || `<li class="muted">Nothing left to confirm.</li>`;
+      if (!leftoverDialog.open)
+        leftoverDialog.showModal();
+    }
+
+    async function submitLeftovers() {
+      if (leftoverSubmitting || !leftoverDialog.open) return;
+      leftoverSubmitting = true;
+      const flash = document.getElementById("flash");
+      const completedIds = [...leftoverDialog.querySelectorAll("input.leftover-done:checked")]
+        .map(el => Number(el.dataset.leftoverId));
+      const efforts = {};
+      leftoverDialog.querySelectorAll("input.leftover-done").forEach(el => {
+        const id = el.dataset.leftoverId;
+        const effortInput = leftoverDialog.querySelector(
+          `input.effort-toggle-input[name="leftover-effort-${id}"]`);
+        efforts[id] = effortToggleValue(effortInput);
+      });
+      try {
+        await api.post("/api/assignments/today/resolve-leftovers", { completedIds, efforts });
+        leftoverDialog.close();
+        await load();
+      } catch (err) {
+        leftoverSubmitting = false;
+        showFlash(flash, err.message, true);
+      }
+    }
+
+    leftoverDialog.addEventListener("cancel", e => {
+      e.preventDefault();
+      submitLeftovers();
+    });
+    leftoverDialog.addEventListener("click", e => {
+      if (e.target === leftoverDialog) submitLeftovers();
+    });
+    document.getElementById("leftoverConfirm").onclick = submitLeftovers;
+    document.getElementById("leftoverClose").onclick = submitLeftovers;
 
     document.getElementById("optionalForm").onsubmit = async (e) => {
       e.preventDefault();

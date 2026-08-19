@@ -105,6 +105,7 @@ public class PlannedDay
     public int SequenceIndex { get; set; }
     public PlannedDayStatus Status { get; set; } = PlannedDayStatus.Planned;
     public DateOnly? CalendarDate { get; set; }
+    public DateOnly? StartedOn { get; set; }
     public DateTime? CompletedAt { get; set; }
 
     public User Student { get; set; } = null!;
@@ -125,6 +126,8 @@ public class Assignment
     public EffortLevel Effort { get; set; } = EffortLevel.Low;
     public AssignmentKind Kind { get; set; } = AssignmentKind.Required;
     public AssignmentStatus Status { get; set; } = AssignmentStatus.Assigned;
+    public CarryoverKind CarryoverKind { get; set; } = CarryoverKind.None;
+    public int? SourcePlannedDayId { get; set; }
     public DateTime? CompletedAt { get; set; }
     public DateTime? HoursAcknowledgedAt { get; set; }
     public DateOnly? ActivityDate { get; set; }

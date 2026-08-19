@@ -86,9 +86,12 @@
 
     document.getElementById("dayTitle").textContent = `Day #${day.sequenceIndex}`;
     document.getElementById("dayMeta").textContent =
-      day.completedAt
-        ? `Completed at ${new Date(day.completedAt).toLocaleString()}`
-        : `Status: ${day.status}`;
+      [
+        day.startedOn ? `Started ${day.startedOn}` : null,
+        day.completedAt
+          ? `Completed at ${new Date(day.completedAt).toLocaleString()}`
+          : `Status: ${day.status}`
+      ].filter(Boolean).join(" · ");
 
     const statusEl = document.getElementById("dayStatusBadge");
     const statusKey = normalizeDayStatus(day.status).replace(/_/g, "");
@@ -126,6 +129,7 @@
             <div class="muted">${a.kind} · ${a.effort}</div>
           </div>
           ${statusBadge(a.status)}
+          ${carryoverBadge(a.carryoverKind, a.sourceStartedOn)}
         </div>
         <div class="row adjust-asg-controls">
           <label class="adjust-toggle">
