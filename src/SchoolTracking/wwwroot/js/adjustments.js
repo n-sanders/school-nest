@@ -1,6 +1,22 @@
 (() => {
   let selectedDayId = null;
   let loading = false;
+  let catalogTree = [];
+
+  document.getElementById("addEffortWrap").innerHTML = effortSelect("addEffort", "low");
+
+  function esc(value) {
+    return String(value ?? "").replace(/[&<>"']/g, ch => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[ch]);
+  }
+
+  function localDateValue(d = new Date()) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
 
   function dayStatusBadge(status) {
     const map = {
@@ -18,6 +34,54 @@
     return String(status || "").toLowerCase();
   }
 
+  function subjectsWithWork() {
+    return catalogTree.filter(s => (s.courses || []).some(c => (c.assignments || []).length > 0));
+  }
+
+  function fillCourses() {
+    const subject = catalogTree.find(s => s.id === Number(document.getElementById("addSubject").value));
+    const courses = (subject?.courses || []).filter(c => (c.assignments || []).length > 0);
+    document.getElementById("addCourse").innerHTML = courses.map(c =>
+      `<option value="${c.id}">${esc(c.name)}</option>`
+    ).join("");
+    fillAssignments();
+  }
+
+  function fillAssignments() {
+    const subject = catalogTree.find(s => s.id === Number(document.getElementById("addSubject").value));
+    const course = (subject?.courses || []).find(c => c.id === Number(document.getElementById("addCourse").value));
+    const items = course?.assignments || [];
+    document.getElementById("addAssignment").innerHTML = items.map(a =>
+      `<option value="${a.id}" data-effort="${esc(a.defaultEffort)}">${esc(a.name)}</option>`
+    ).join("");
+    syncAddEffort();
+  }
+
+  function syncAddEffort() {
+    const opt = document.getElementById("addAssignment").selectedOptions[0];
+    const effort = document.querySelector('#addEffortWrap select');
+    if (opt?.dataset.effort && effort) effort.value = opt.dataset.effort;
+  }
+
+  function fillCatalogSelects() {
+    const subjects = subjectsWithWork();
+    const subjectSel = document.getElementById("addSubject");
+    const prevSubject = subjectSel.value;
+    subjectSel.innerHTML = subjects.map(s =>
+      `<option value="${s.id}">${esc(s.name)}</option>`
+    ).join("") || `<option value="">No catalog assignments</option>`;
+    if (prevSubject && [...subjectSel.options].some(o => o.value === prevSubject)) {
+      subjectSel.value = prevSubject;
+    }
+    const prevCourse = document.getElementById("addCourse").value;
+    fillCourses();
+    const courseSel = document.getElementById("addCourse");
+    if (prevCourse && [...courseSel.options].some(o => o.value === prevCourse)) {
+      courseSel.value = prevCourse;
+      fillAssignments();
+    }
+  }
+
   async function loadPage({ keepDayId = true } = {}) {
     if (loading) return;
     loading = true;
@@ -26,7 +90,15 @@
       const me = await requireAuth("parent");
       await renderTopbar(me, "adjustments");
 
-      const students = await api.get("/api/catalog/students");
+      const [students, tree] = await Promise.all([
+        api.get("/api/catalog/students"),
+        catalogTree.length ? Promise.resolve(catalogTree) : api.get("/api/catalog/tree")
+      ]);
+      if (!catalogTree.length) {
+        catalogTree = tree;
+        fillCatalogSelects();
+      }
+
       const studentSelect = document.getElementById("studentId");
       const prevStudent = studentSelect.value;
       studentSelect.innerHTML = students.map(s =>
@@ -35,7 +107,12 @@
       if (prevStudent) studentSelect.value = prevStudent;
 
       const around = document.getElementById("around");
-      if (!around.value) around.value = new Date().toISOString().slice(0, 10);
+      if (!around.value) around.value = localDateValue();
+
+      const addDate = document.getElementById("addDate");
+      const today = localDateValue();
+      addDate.max = today;
+      if (!addDate.value) addDate.value = today;
 
       const studentId = studentSelect.value;
       if (!studentId) return;
@@ -230,6 +307,45 @@
     const id = t.dataset.asgSaveDate;
     const input = document.querySelector(`[data-asg-date="${id}"]`);
     await patchAssignment(Number(id), { activityDate: input?.value || "" });
+  };
+
+  document.getElementById("addSubject").onchange = () => fillCourses();
+  document.getElementById("addCourse").onchange = () => fillAssignments();
+  document.getElementById("addAssignment").onchange = () => syncAddEffort();
+
+  document.getElementById("addCompleted").onsubmit = async (e) => {
+    e.preventDefault();
+    const flash = document.getElementById("flash");
+    const studentId = document.getElementById("studentId").value;
+    const activityDate = document.getElementById("addDate").value;
+    const catalogAssignmentId = Number(document.getElementById("addAssignment").value);
+    if (!studentId) {
+      showFlash(flash, "Pick a student first", true);
+      return;
+    }
+    if (!catalogAssignmentId) {
+      showFlash(flash, "Pick a catalog assignment first", true);
+      return;
+    }
+    try {
+      const result = await api.post(`/api/corrections/${studentId}/completed-assignments`, {
+        catalogAssignmentId,
+        effort: document.querySelector('#addEffortWrap select')?.value,
+        activityDate
+      });
+      const around = document.getElementById("around");
+      around.value = activityDate;
+      selectedDayId = result.day?.id ?? null;
+      showFlash(
+        flash,
+        result.createdDay
+          ? "Added completed work and created that school day"
+          : "Added completed work to that day"
+      );
+      await loadPage({ keepDayId: true });
+    } catch (err) {
+      showFlash(flash, err.message, true);
+    }
   };
 
   loadPage({ keepDayId: false });

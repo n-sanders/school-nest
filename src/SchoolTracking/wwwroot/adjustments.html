@@ -20,7 +20,8 @@
     <div class="panel">
       <h1>Adjustments</h1>
       <p class="muted">
-        Fix completion and calendar dates when something was marked on the wrong day.
+        Fix completion and calendar dates when something was marked on the wrong day,
+        or add required catalog work that was done on a previous day (or today).
         Day and assignment toggles are independent. Reopen a partial day (or uncheck Full-day done)
         to unlock planner edits. Partial days count as closed for reports but are not full days;
         checking Full-day done promotes them.
@@ -29,6 +30,22 @@
         <label>Student <select id="studentId" required></select></label>
         <label>Around date <input id="around" type="date" required /></label>
         <button type="submit">Refresh</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Add completed work</h2>
+      <p class="muted">
+        Hours count immediately. If that date has no school day yet, one is created as a full day.
+        Same-course extras still go on Optional.
+      </p>
+      <form id="addCompleted" class="row">
+        <label>Date <input id="addDate" type="date" required /></label>
+        <label>Subject <select id="addSubject" required></select></label>
+        <label>Course <select id="addCourse" required></select></label>
+        <label>Assignment <select id="addAssignment" required></select></label>
+        <label>Effort <span id="addEffortWrap"></span></label>
+        <button type="submit">Add completed work</button>
       </form>
     </div>
 

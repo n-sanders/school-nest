@@ -283,7 +283,171 @@ public static class CorrectionEndpoints
                 sourceStartedOn));
         });
 
+        group.MapPost("/{studentId:int}/completed-assignments", async (
+            int studentId,
+            AddCompletedAssignmentRequest req,
+            AuthService auth,
+            HttpContext http,
+            AppDbContext db) =>
+        {
+            var user = await http.RequireParentAsync(auth);
+            if (user is null) return Results.Empty;
+
+            var student = await db.Users.FirstOrDefaultAsync(u =>
+                u.Id == studentId && u.FamilyId == user.FamilyId && u.Role == UserRole.Student);
+            if (student is null)
+                return Results.NotFound(new { error = "Student not found" });
+
+            if (string.IsNullOrWhiteSpace(req.ActivityDate)
+                || !DateOnly.TryParse(req.ActivityDate, out var activityDate))
+            {
+                return Results.BadRequest(new { error = "activityDate must be yyyy-MM-dd" });
+            }
+
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            if (activityDate > today)
+                return Results.BadRequest(new { error = "activityDate cannot be in the future" });
+
+            var catalog = await db.CatalogAssignments
+                .Include(a => a.Course).ThenInclude(c => c.Subject)
+                .FirstOrDefaultAsync(a =>
+                    a.Id == req.CatalogAssignmentId && a.Course.Subject.FamilyId == user.FamilyId);
+            if (catalog is null)
+                return Results.NotFound(new { error = "Catalog assignment not found" });
+
+            EffortLevel effort = catalog.DefaultEffort;
+            if (req.Effort is not null)
+            {
+                if (!AssignmentHelpers.TryParseEffort(req.Effort, out effort))
+                    return Results.BadRequest(new { error = "effort must be low or high" });
+            }
+
+            var day = await db.PlannedDays.FirstOrDefaultAsync(d =>
+                d.StudentUserId == studentId
+                && (d.Status == PlannedDayStatus.Completed
+                    || d.Status == PlannedDayStatus.PartiallyCompleted)
+                && d.CalendarDate == activityDate);
+
+            var createdDay = false;
+            if (day is null)
+            {
+                // Same calendar date already started: attach instead of a second closed day.
+                day = await db.PlannedDays.FirstOrDefaultAsync(d =>
+                    d.StudentUserId == studentId
+                    && d.Status == PlannedDayStatus.InProgress
+                    && d.StartedOn == activityDate);
+            }
+
+            if (day is null)
+            {
+                day = await InsertCompletedDayAsync(db, studentId, activityDate);
+                createdDay = true;
+            }
+
+            var existsForCourse = await db.Assignments.AnyAsync(a =>
+                a.PlannedDayId == day.Id
+                && a.CourseId == catalog.CourseId
+                && a.Kind == AssignmentKind.Required
+                && a.Status != AssignmentStatus.Deferred);
+            if (existsForCourse)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "This day already has a required assignment for that course"
+                });
+            }
+
+            db.Assignments.Add(new Assignment
+            {
+                StudentUserId = studentId,
+                CourseId = catalog.CourseId,
+                CatalogAssignmentId = catalog.Id,
+                PlannedDayId = day.Id,
+                Name = catalog.Name,
+                Url = catalog.Url,
+                Description = catalog.Description,
+                Effort = effort,
+                Kind = AssignmentKind.Required,
+                Status = AssignmentStatus.Completed,
+                CompletedAt = DateTime.UtcNow,
+                ActivityDate = activityDate
+            });
+            await db.SaveChangesAsync();
+
+            var fresh = await db.PlannedDays
+                .Include(d => d.Assignments)
+                    .ThenInclude(a => a.Course)
+                        .ThenInclude(c => c!.Subject)
+                .FirstAsync(d => d.Id == day.Id);
+            return Results.Ok(new
+            {
+                createdDay,
+                day = ToDayDetail(
+                    fresh,
+                    await AssignmentHelpers.LoadSourceStartedOnAsync(db, fresh.Assignments))
+            });
+        });
+
         return group;
+    }
+
+    /// <summary>
+    /// Insert a completed day among existing slots by calendar date.
+    /// SequenceIndex is unique per student, so later days shift up.
+    /// SQLite checks unique indexes per row, so the shift uses a high offset first.
+    /// </summary>
+    private static async Task<PlannedDay> InsertCompletedDayAsync(
+        AppDbContext db, int studentUserId, DateOnly calendarDate)
+    {
+        var closed = await db.PlannedDays
+            .Where(d => d.StudentUserId == studentUserId
+                        && (d.Status == PlannedDayStatus.Completed
+                            || d.Status == PlannedDayStatus.PartiallyCompleted)
+                        && d.CalendarDate != null)
+            .Select(d => new { d.SequenceIndex, CalendarDate = d.CalendarDate!.Value })
+            .ToListAsync();
+
+        int newSeq;
+        var predecessor = closed
+            .Where(d => d.CalendarDate <= calendarDate)
+            .OrderBy(d => d.CalendarDate)
+            .ThenBy(d => d.SequenceIndex)
+            .LastOrDefault();
+        if (predecessor is not null)
+        {
+            newSeq = predecessor.SequenceIndex + 1;
+        }
+        else if (closed.Count > 0)
+        {
+            newSeq = closed.Min(d => d.SequenceIndex);
+        }
+        else
+        {
+            newSeq = await db.PlannedDays
+                .Where(d => d.StudentUserId == studentUserId)
+                .MinAsync(d => (int?)d.SequenceIndex) ?? 1;
+        }
+
+        const int bump = 100_000;
+        await db.PlannedDays
+            .Where(d => d.StudentUserId == studentUserId && d.SequenceIndex >= newSeq)
+            .ExecuteUpdateAsync(s => s.SetProperty(d => d.SequenceIndex, d => d.SequenceIndex + bump));
+        await db.PlannedDays
+            .Where(d => d.StudentUserId == studentUserId && d.SequenceIndex >= newSeq + bump)
+            .ExecuteUpdateAsync(s => s.SetProperty(d => d.SequenceIndex, d => d.SequenceIndex - bump + 1));
+
+        var day = new PlannedDay
+        {
+            StudentUserId = studentUserId,
+            SequenceIndex = newSeq,
+            Status = PlannedDayStatus.Completed,
+            CalendarDate = calendarDate,
+            StartedOn = calendarDate,
+            CompletedAt = DateTime.UtcNow
+        };
+        db.PlannedDays.Add(day);
+        await db.SaveChangesAsync();
+        return day;
     }
 
     private static Task<bool> ClosedDayOnDateAsync(AppDbContext db, int studentUserId, int exceptDayId, DateOnly calendarDate) =>
@@ -336,4 +500,5 @@ public static class CorrectionEndpoints
 
     public record DayCorrectionRequest(bool? Completed, string? CalendarDate);
     public record AssignmentCorrectionRequest(bool? Completed, string? ActivityDate);
+    public record AddCompletedAssignmentRequest(int CatalogAssignmentId, string? Effort, string ActivityDate);
 }
